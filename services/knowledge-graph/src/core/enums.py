@@ -4,10 +4,13 @@ from enum import StrEnum
 class DocumentSource(StrEnum):
     """Источник документа (каким приложением он был сформирован)"""
 
+    TXT = "txt"
     MS_WORD = "Microsoft Word"
+    LIBRE_OFFICE = "LibreOffice"
     EXCEL = "Microsoft Excel"
     POWERPOINT = "Microsoft Powerpoint"
     PDF = "pdf"
+    IMAGE = "image"
     AUDIO = "audio"
     VIDEO = "video"
     UNKNOWN = "unknown"
@@ -18,6 +21,7 @@ class DocumentCategory(StrEnum):
 
     TEXT = "text"
     DOCUMENT = "document"
+    TABLE = "table"
     PRESENTATION = "presentation"
     IMAGE = "image"
     VIDEO = "video"
