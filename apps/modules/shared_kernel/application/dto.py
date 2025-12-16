@@ -1,6 +1,6 @@
 from abc import ABC
 
-from pydantic import BaseModel, ConfigDict, NonNegativeInt
+from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt
 
 
 class DTO(BaseModel, ABC):
@@ -15,8 +15,8 @@ class DTO(BaseModel, ABC):
 class Pagination(DTO):
     """Пагинация"""
 
-    page: NonNegativeInt
-    limit: NonNegativeInt
+    page: NonNegativeInt = Field(ge=1)
+    limit: NonNegativeInt = Field(ge=1, le=100)
 
     @property
     def offset(self) -> int:

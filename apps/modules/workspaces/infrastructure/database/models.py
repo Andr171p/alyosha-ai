@@ -53,7 +53,6 @@ class WorkspaceModel(Base):
     organization_type: Mapped[str]
     organization_url: Mapped[StrNull]
     description: Mapped[TextNull]
-    use_ai_consultant: Mapped[bool]
 
     members: Mapped[list["MemberModel"]] = relationship(
         back_populates="workspace", lazy="selectin"

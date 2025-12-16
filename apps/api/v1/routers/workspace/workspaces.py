@@ -1,10 +1,17 @@
-from dishka.integrations.fastapi import DishkaRoute, FromDishka
-from fastapi import APIRouter, status
+from uuid import UUID
 
-from modules.admin.application import CreateWorkspaceUseCase, WorkspaceRepository
-from modules.admin.application.dto import SentInvitation, WorkspaceCreate
-from modules.admin.domain import CreateWorkspaceCommand, Workspace
+from dishka.integrations.fastapi import DishkaRoute, FromDishka
+from fastapi import APIRouter, Depends, status
+
+from api.dependencies import (
+    ManagerOrHigherRequiredDep,
+    PaginationDep,
+    require_manager_or_higher_dep,
+)
 from modules.iam.infrastructure.fastapi import CurrentUserDep
+from modules.workspaces.application import CreateWorkspaceUseCase, WorkspaceRepository
+from modules.workspaces.application.dto import SentInvitation, WorkspaceCreate
+from modules.workspaces.domain import CreateWorkspaceCommand, Member, Workspace
 
 router = APIRouter(prefix="/workspaces", tags=["Workspaces"], route_class=DishkaRoute)
 
@@ -38,15 +45,45 @@ async def create_workspace(
     return await usecase.execute(command)
 
 
+@router.get(
+    path="/{workspace_id}/members",
+    status_code=status.HTTP_200_OK,
+    response_model=list[Member],
+    summary="Получить список участников",
+    dependencies=[Depends(require_manager_or_higher_dep)]
+)
+async def get_members(
+        workspace_id: UUID,
+        pagination: PaginationDep,
+        repository: FromDishka[WorkspaceRepository]
+) -> list[Member]:
+    return await repository.get_members(workspace_id, pagination)
+
+
+@router.get(
+    path="/{workspace_id}/members/{member_id}",
+    status_code=status.HTTP_200_OK,
+    response_model=Member,
+    summary="Получить конкретного участника",
+)
+async def get_member(
+        workspace_id: UUID, member_id: UUID, repository: FromDishka[WorkspaceRepository]
+) -> Member:
+    return await repository.get_member(workspace_id, member_id)
+
+
 @router.post(
     path="/{workspace_id}/invitations",
     status_code=status.HTTP_201_CREATED,
     response_model=SentInvitation,
     summary="Приглашает участника в рабочую область",
 )
-async def invite_to_workspace() -> SentInvitation: ...
+async def invite_to_workspace(
+        manager: ManagerOrHigherRequiredDep,
+) -> SentInvitation: ...
 
 
+'''
 @router.post(
     path="/{workspace_id}/invitations/accept/{token}",
     status_code=status.HTTP_201_CREATED,
@@ -54,3 +91,4 @@ async def invite_to_workspace() -> SentInvitation: ...
     summary="Принять приглашение",
 )
 async def accept_invitation() -> ...: ...
+'''

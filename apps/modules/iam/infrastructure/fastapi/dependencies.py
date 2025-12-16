@@ -9,7 +9,7 @@ from ...application.exceptions import UnauthorizedError
 from ...domain import TokenType
 
 
-def get_current_user(
+def _get_current_user(
         request: Request,    # noqa: ARG001
         credentials: HTTPAuthorizationCredentials | None = Depends(HTTPBearer(auto_error=False))
 ) -> CurrentUser:
@@ -34,4 +34,4 @@ def get_current_user(
         })
 
 
-CurrentUserDep = Annotated[CurrentUser, Depends(get_current_user)]
+CurrentUserDep = Annotated[CurrentUser, Depends(_get_current_user)]

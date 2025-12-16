@@ -17,7 +17,6 @@ class WorkspaceCreatedEvent(Event):
     organization_type: OrganizationType
     organization_url: HttpUrl | None
     description: str | None
-    use_ai_consultant: bool
 
 
 class MemberInvitedEvent(Event):

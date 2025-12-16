@@ -67,7 +67,7 @@ class SQLAlchemyRepository[EntityT: Entity, ModelT: Base]:
         try:
             stmt = (
                 select(self.model)
-                .order_by(self.model.created_at)
+                .order_by(self.model.created_at.desc())
                 .offset(pagination.offset)
                 .limit(pagination.limit)
             )
@@ -77,7 +77,8 @@ class SQLAlchemyRepository[EntityT: Entity, ModelT: Base]:
         except SQLAlchemyError as e:
             raise ReadingError(
                 entity_name=self.entity.__name__,
-                entity_id=f"page={pagination.page}, limit={pagination.limit}",
+                entity_id="*",
+                details={"page": pagination.page, "limit": pagination.limit},
                 original_error=e
             ) from e
 

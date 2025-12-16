@@ -55,3 +55,15 @@ class InvalidTokenError(AppError):
         super().__init__(
             message=message, code="INVALID_TOKEN", type=ErrorType.UNAUTHORIZED, details=details
         )
+
+
+class PermissionDeniedError(AppError):
+    """Недостаточно прав"""
+
+    def __init__(self, message: str, details: dict[str, Any] | None = None) -> None:
+        super().__init__(
+            message=message,
+            code="PERMISSION_DENIED",
+            type=ErrorType.PERMISSION_DENIED,
+            details=details
+        )

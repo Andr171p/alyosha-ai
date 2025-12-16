@@ -1,8 +1,8 @@
+from modules.iam.domain.exceptions import PermissionDeniedError
 from modules.shared_kernel.application import MessageBus, UnitOfWork
 from modules.shared_kernel.application.exceptions import NotFoundError
 
 from ..domain import CreateWorkspaceCommand, InviteMemberCommand, Workspace
-from ..domain.exceptions import PermissionDeniedError
 from .dto import SentInvitation
 from .repositories import WorkspaceRepository
 

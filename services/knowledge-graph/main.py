@@ -1,20 +1,12 @@
-from typing import Final
+from mrkdwn_analysis import MarkdownAnalyzer
 
-import logging
+analyzer = MarkdownAnalyzer("НИР_Косов Андрей Сергеевич.md")
+headers = analyzer.identify_headers()
+paragraphs = analyzer.identify_paragraphs()
+links = analyzer.identify_links()
+tables = analyzer.identify_tables()
 
-import uvicorn
-from fastapi import FastAPI
-
-from src.api.app import create_fastapi_app
-
-app: Final[FastAPI] = create_fastapi_app()
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    uvicorn.run(
-        app,
-        host="0.0.0.0",  # noqa: S104
-        port=8000,
-        log_level="info",
-        access_log=True,
-    )
+print(f"Headers found: {headers}")
+print(f"Paragraphs found: {paragraphs}")
+print(f"Links found: {links}")
+print(f"Tables found: {tables}")

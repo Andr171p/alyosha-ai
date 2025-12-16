@@ -54,7 +54,7 @@ class MemberRole(StrEnum):
     """
 
     OWNER = "owner"
-    ADMIN = "admin"
+    ADMIN = "workspaces"
     MANAGER = "manager"
     MEMBER = "member"
     GUEST = "guest"

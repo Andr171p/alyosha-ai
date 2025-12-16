@@ -5,7 +5,7 @@ from fastapi import APIRouter
 from .auth import router as auth_router
 from .chat import router as chat_router
 from .users import router as users_router
-from .workspaces import router as workspaces_router
+from .workspace import router as workspaces_router
 
 router = APIRouter(prefix="/api/v1")
 

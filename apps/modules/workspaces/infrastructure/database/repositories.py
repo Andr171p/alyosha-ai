@@ -3,6 +3,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
+from modules.shared_kernel.application import Pagination
 from modules.shared_kernel.application.exceptions import ConflictError, CreationError, ReadingError
 from modules.shared_kernel.insrastructure.database import DataMapper, SQLAlchemyRepository
 
@@ -23,7 +24,6 @@ class WorkspaceDataMapper(DataMapper[Workspace, WorkspaceModel]):
             organization_type=OrganizationType(model.organization_type),
             organization_url=model.organization_url,
             description=model.description,
-            use_ai_consultant=model.use_ai_consultant,
             members_count=model.members_count,
             created_at=model.created_at,
         )
@@ -39,7 +39,6 @@ class WorkspaceDataMapper(DataMapper[Workspace, WorkspaceModel]):
             organization_type=entity.organization_type,
             organization_url=str(entity.organization_url),
             description=entity.description,
-            use_ai_consultant=entity.use_ai_consultant,
             created_at=entity.created_at,
         )
 
@@ -102,6 +101,30 @@ class SQLAlchemyWorkspaceRepository(
                 entity_name="Member",
                 entity_id=user_id,
                 details={"workspace_id": workspace_id, "user_id": user_id},
+                original_error=e
+            ) from e
+
+    async def get_members(self, workspace_id: UUID, pagination: Pagination) -> list[Member]:
+        try:
+            stmt = (
+                select(MemberModel)
+                .where(MemberModel.workspace_id == workspace_id)
+                .order_by(MemberModel.created_at.desc())
+                .offset(pagination.offset)
+                .limit(pagination.limit)
+            )
+            results = await self.session.execute(stmt)
+            models = results.scalars().all()
+            return [MemberDataMapper.model_to_entity(model) for model in models]
+        except SQLAlchemyError as e:
+            raise ReadingError(
+                entity_name="Member",
+                entity_id="*",
+                details={
+                    "workspace_id": workspace_id,
+                    "page": pagination.page,
+                    "limit": pagination.limit,
+                },
                 original_error=e
             ) from e
 

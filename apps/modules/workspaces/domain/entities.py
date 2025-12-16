@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 from pydantic import EmailStr, HttpUrl, NonNegativeInt
 
+from modules.iam.domain.exceptions import PermissionDeniedError
 from modules.shared_kernel.domain import AggregateRoot, Entity, InvariantViolationError
 from modules.shared_kernel.utils import current_datetime, generate_safe_string
 
@@ -39,10 +40,31 @@ class Member(Entity):
             status=MemberStatus.ACTIVE,
         )
 
+    @property
+    def is_owner(self) -> bool:
+        """Является ли участник владельцем"""
+
+        return self.role == MemberRole.OWNER
+
     def can_invite(self) -> bool:
         """Проверка может ли участник приглашать других участников"""
 
         return self.role in {MemberRole.OWNER, MemberRole.ADMIN, MemberRole.MEMBER}
+
+    def has_role(self, role: MemberRole) -> bool:
+        return self.role == role
+
+    def authorize(self) -> Self:
+        if self.status != MemberStatus.ACTIVE:
+            raise PermissionDeniedError(
+                f"Member status is `{self.status.value}`!",
+                details={
+                    "workspace_id": self.workspace_id,
+                    "user_id": self.user_id,
+                    "role": self.role
+                },
+            )
+        return self
 
 
 class Invitation(Entity):
@@ -67,7 +89,6 @@ class Workspace(AggregateRoot):
         organization_type: Тип организации (обязательно поле).
         organization_url: URL адрес компании (адрес главного сайта).
         description: Описание предметной области.
-        use_ai_consultant: Использовать ли AI консультанта для управления рабочим пространством.
         members_count: Количество участников.
     """
 
@@ -78,7 +99,6 @@ class Workspace(AggregateRoot):
     organization_type: OrganizationType
     organization_url: HttpUrl | None = None
     description: str | None = None
-    use_ai_consultant: bool = True
     members_count: NonNegativeInt
 
     @classmethod
@@ -104,7 +124,6 @@ class Workspace(AggregateRoot):
             organization_type=workspace.organization_type,
             organization_url=workspace.organization_url,
             description=workspace.description,
-            use_ai_consultant=workspace.use_ai_consultant,
         ))
         return workspace, owner
 

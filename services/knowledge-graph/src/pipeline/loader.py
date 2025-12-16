@@ -10,6 +10,13 @@ logger = logging.getLogger(__name__)
 
 
 async def upload_document(filename: str, content: AsyncIterable[bytes]) -> Document:
+    """Загрузка документа в рабочее пространство для дальнейшего анализа.
+
+    :param filename: Оригинальное имя файла.
+    :param content: Бинарные данные файла.
+    :returns: Метаданные документа.
+    """
+
     logger.info("Start uploading `%s` file", filename)
     workflow_structure = DocumentWorkflowStructure.from_filename(filename)
     logger.info("Workflow structure created, workdir - `%s`", workflow_structure.root)

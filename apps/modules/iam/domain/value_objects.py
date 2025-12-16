@@ -64,7 +64,7 @@ class UserRole(StrEnum):
     """
 
     SUPERADMIN = "superadmin"
-    ADMIN = "admin"
+    ADMIN = "workspaces"
     MANAGER = "manager"
     MODERATOR = "moderator"
     USER = "user"

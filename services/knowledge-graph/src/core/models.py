@@ -44,6 +44,21 @@ class DocumentWorkflowStructure(BaseModel):
             metadata_file=root / "metadata.json",
         )
 
+    @classmethod
+    def from_existing(cls, slug: str) -> Self:
+        root = WORKDIR / slug
+        input_file = next(
+            (path for path in Path(root).glob("input.*") if path.is_file()),
+            None
+        )
+        if input_file is None:
+            raise ValueError(f"Document not uploaded in directory {root}!")
+        return cls(
+            root=root,
+            input_file=input_file,
+            metadata_file=root / "metadata.json",
+        )
+
 
 class Document(BaseModel):
     """Документ загруженный в систему пользователем"""
@@ -56,3 +71,7 @@ class Document(BaseModel):
     source: DocumentSource
     metadata: dict[str, Any] = Field(default_factory=dict)
     uploaded_at: datetime = Field(default_factory=current_datetime)
+
+    @property
+    def workflow_structure(self) -> DocumentWorkflowStructure:
+        return DocumentWorkflowStructure.from_existing(self.slug)
