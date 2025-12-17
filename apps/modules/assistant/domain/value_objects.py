@@ -21,8 +21,8 @@ class ModelConfiguration(ValueObject):
 
     provider_name: str
     provider_type: LLMProviderType
-    apikey: str
-    project: str
+    apikey: str | None = None
+    project: str | None = None
     model_name: str
     base_url: HttpUrl | None = None
     temperature: float = DEFAULT_TEMPERATURE

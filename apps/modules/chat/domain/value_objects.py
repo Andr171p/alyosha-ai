@@ -47,7 +47,7 @@ class TokenUsage(ValueObject):
 
     token_type: TokenType
     tokens_count: NonNegativeInt
-    total_tokens: NonNegativeInt | None = None
+    total_tokens: NonNegativeInt
 
     @model_validator(mode="after")
     def validate_total_tokens(self) -> Self:

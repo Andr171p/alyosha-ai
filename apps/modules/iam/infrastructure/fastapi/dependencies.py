@@ -1,12 +1,15 @@
 from typing import Annotated
 
+from collections.abc import Callable
+
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from ...application import verify_token
 from ...application.dto import CurrentUser
 from ...application.exceptions import UnauthorizedError
-from ...domain import TokenType
+from ...domain import TokenType, UserRole
+from ...domain.exceptions import PermissionDeniedError
 
 
 def _get_current_user(
@@ -34,4 +37,29 @@ def _get_current_user(
         })
 
 
+# Зависимость для получения текущего пользователя
 CurrentUserDep = Annotated[CurrentUser, Depends(_get_current_user)]
+
+
+def require_user_roles(*required_roles: UserRole) -> Callable[[CurrentUserDep], CurrentUser]:
+    """Проверка требуемых ролей у пользователя.
+
+    :param required_roles: Запрашиваемые роли.
+    """
+
+    def dependency(current_user: CurrentUserDep) -> CurrentUser:
+        if required_roles and current_user.role not in required_roles:
+            raise PermissionDeniedError(
+                f"Required roles: {', '.join(required_roles)}. "
+                f"Your role: `{current_user.role.value}`!",
+                details={
+                    "required_roles": required_roles,
+                    "user_role": current_user.role.value,
+                    "user_id": current_user.user_id,
+                },
+            )
+        if not required_roles:
+            raise PermissionDeniedError("Access denied!")
+        return current_user
+
+    return dependency

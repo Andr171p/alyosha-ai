@@ -80,3 +80,30 @@ class CustomListPrimitive(UserList):
             core_schema.str_schema(),
             serialization=core_schema.plain_serializer_function_ser_schema(str),
         )
+
+
+class IntPrimitive(int, ABC):
+    """Базовый класс для реализации цело-численного примитива.
+    Для создания логики валидации нужно реализовать метод `validate`.
+    """
+
+    def __new__(cls, value: int, *args, **kwargs) -> Self:
+        value = cls.validate(value, *args, **kwargs)
+        return super().__new__(cls, value)
+
+    @classmethod
+    @abstractmethod
+    def validate(cls, value: int, *args, **kwargs) -> int:
+        """Логика валидации числа"""
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls,
+        source_type: Any,
+        handler: Callable[[Any], CoreSchema],
+    ) -> CoreSchema:
+        return core_schema.no_info_after_validator_function(
+            cls.validate,
+            core_schema.int_schema(),
+            serialization=core_schema.plain_serializer_function_ser_schema(int),
+        )
