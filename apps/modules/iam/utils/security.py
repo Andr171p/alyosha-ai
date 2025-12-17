@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 if TYPE_CHECKING:
     from ..domain import TokenType
@@ -224,3 +224,10 @@ class StringEncryptor:
             ) from e
         else:
             return decrypted_text
+
+
+string_encryptor: Final[StringEncryptor] = StringEncryptor(
+    encryption_key=settings.encryption.key,
+    key_length=settings.encryption.key_length,
+    iterations=settings.encryption.iterations,
+)
