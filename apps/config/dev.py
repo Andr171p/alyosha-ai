@@ -75,6 +75,15 @@ class JWTSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="JWT_")
 
 
+class EncryptionSettings(BaseSettings):
+    key: str = "<KEY>"
+    salt: str = "<SALT>"
+    iterations: int = 100_000
+    key_length: int = 32
+
+    model_config = SettingsConfigDict(env_prefix="ENCRYPTION_")
+
+
 class VKSettings(BaseSettings):
     client_id: str = "<CLIENT_ID>"
     client_secret: str = "<CLIENT_SECRET>"
@@ -126,6 +135,7 @@ class Settings(BaseSettings):
     oauth: OAuthSettings = OAuthSettings()
     embeddings: EmbeddingsSettings = EmbeddingsSettings()
     mailru: MailRuSettings = MailRuSettings()
+    encryption: EncryptionSettings = EncryptionSettings()
 
 
 settings: Final[Settings] = Settings()

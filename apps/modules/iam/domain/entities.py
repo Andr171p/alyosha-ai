@@ -10,7 +10,6 @@ from modules.shared_kernel.domain import Entity, InvariantViolationError
 from modules.shared_kernel.utils import current_datetime
 
 from ..utils.common import generate_guest_name
-from ..utils.security import hash_secret, verify_secret
 from .events import UserRegisteredEvent
 from .exceptions import InvalidCredentialsError, UserNotEnabledError
 from .value_objects import (
@@ -138,6 +137,9 @@ class User(BaseUser):
 
     @classmethod
     def register_by_credentials(cls, credentials: UserCredentials) -> Self:
+
+        from ..utils.security import hash_secret  # noqa: PLC0415
+
         user = cls(
             email=credentials.email,
             username=credentials.username,
@@ -171,6 +173,9 @@ class User(BaseUser):
         return user
 
     def authenticate_by_credentials(self, credentials: UserCredentials) -> Self:
+
+        from ..utils.security import verify_secret  # noqa: PLC0415
+
         if self.status in {UserStatus.BANNED, UserStatus.DELETED}:
             raise UserNotEnabledError(
                 user_status=self.status,
