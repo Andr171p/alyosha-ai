@@ -2,9 +2,9 @@ from abc import abstractmethod
 
 from modules.shared_kernel.application import CRUDRepository, Pagination
 
-from ..domain import ModelEntry
+from ..domain import AnyLLM
 
 
-class RegistryRepository(CRUDRepository[ModelEntry]):
+class RegistryRepository(CRUDRepository[AnyLLM]):
     @abstractmethod
-    async def get_most_popular(self, pagination: Pagination) -> list[ModelEntry]: ...
+    async def get_most_popular(self, pagination: Pagination) -> list[...]: ...

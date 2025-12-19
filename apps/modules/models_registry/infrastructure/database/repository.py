@@ -1,0 +1,85 @@
+from typing import TypeVar
+
+from modules.shared_kernel.application import Pagination
+from modules.shared_kernel.insrastructure.database import DataMapper, SQLAlchemyRepository
+
+from ...application import RegistryRepository
+from ...domain import AnyLLM, CommercialLLM, OpenSourceLLM
+from .models import CommercialLLMModel, OpenSourceLLMModel, RatingModel
+
+AnyLLMModel = TypeVar("AnyLLMModel", bound=CommercialLLMModel | OpenSourceLLMModel)
+
+
+class LLMDataMapper(DataMapper[AnyLLM, AnyLLMModel]):
+    @classmethod
+    def model_to_entity(cls, model: AnyLLMModel) -> AnyLLM:
+        values = {
+            "id": model.id,
+            "slug": model.slug,
+            "name": model.name,
+            "provider_name": model.provider_name,
+            "source_url": str(model.source_url),
+            "release_date": model.release_date,
+            "description": model.description,
+            "size_type": model.size_type,
+            "billion_params_count": model.billion_params_count,
+            "context_window_tokens": model.context_window_tokens,
+            "category": model.category,
+            "capabilities": model.capabilities,
+            "modality": model.modality,
+            "target_domains": model.target_domains,
+            "rating": {
+                "count_of_usage": model.rating.count_of_usage,
+                "stars": model.rating.stars,
+            },
+            "created_at": model.created_at,
+        }
+        if isinstance(model, OpenSourceLLMModel):
+            values.update({
+                "min_system_requirements": model.min_system_requirements,
+                "recommended_system_requirements": model.recommended_system_requirements
+            })
+            return OpenSourceLLM.model_validate(values)
+        values.update({"tariff_method": model.tariff_method})
+        return CommercialLLM.model_validate(values)
+
+    @classmethod
+    def entity_to_model(cls, entity: AnyLLM) -> AnyLLMModel:
+        values = {
+            "id": entity.id,
+            "slug": entity.slug,
+            "name": entity.name,
+            "provider_name": entity.provider_name,
+            "source_url": str(entity.source_url),
+            "release_date": entity.release_date,
+            "description": entity.description,
+            "size_type": entity.size_type,
+            "billion_params_count": entity.billion_params_count,
+            "context_window_tokens": entity.context_window_tokens,
+            "category": entity.category,
+            "capabilities": list(entity.capabilities),
+            "modality": entity.modality,
+            "target_domains": list(entity.target_domains),
+            "rating": RatingModel(
+                llm_id=entity.id,
+                count_of_usage=entity.rating.count_of_usage,
+                stars=entity.rating.stars,
+            ),
+            "created_at": entity.created_at,
+        }
+        if isinstance(entity, OpenSourceLLM):
+            values.update({
+                "min_system_requirements": entity.min_system_requirements.model_dump(),
+                "recommended_system_requirements": entity.recommended_system_requirements.model_dump(),  # noqa: E501
+            })
+            return OpenSourceLLMModel(**values)
+        values.update({"tariff_method": entity.tariff_method})
+        return CommercialLLMModel(**values)
+
+
+class SQLAlchemyRegistryRepository(SQLAlchemyRepository[AnyLLM, AnyLLMModel], RegistryRepository):
+    entity = AnyLLM
+    model = AnyLLMModel
+    data_mapper = LLMDataMapper
+
+    async def get_most_popular(self, pagination: Pagination) -> list[...]: ...

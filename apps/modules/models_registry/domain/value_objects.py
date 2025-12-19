@@ -1,5 +1,4 @@
-from typing import Literal
-
+from decimal import Decimal
 from enum import StrEnum
 
 from pydantic import NonNegativeInt, PositiveInt
@@ -67,17 +66,7 @@ class ModelCapability(StrEnum):
     SUMMARIZATION = "summarization"
 
 
-class ModelTask(StrEnum):
-    """Задачи выполняемые моделью"""
-
-    IMAGE2TEXT = "image-to-text"
-    STT = "speech-to-text"
-    TTS = "text-to-speech"
-    QA = "question-answering"
-    ANY2ANY = "any2any"
-
-
-class ModelModality(StrEnum):
+class ModalityType(StrEnum):
     """Модальность модели (с какими данными работает модель)"""
 
     TEXT = "text"
@@ -88,14 +77,32 @@ class ModelModality(StrEnum):
     MULTIMODAL = "multimodal"
 
 
-class ModelSpecification(ValueObject):
-    """Технические характеристики модели
+class TargetDomain(StrEnum):
+    """Доменные области для спецификации модели"""
+
+    GENERAL_PURPOSE = "Общего назначения"
+    CODE_GENERATION = "Генерация кода"
+    MEDICAL = "Медицина"
+    LEGAL = "Юридический"
+    FINANCIAL = "Финансовый"
+    SCIENTIFIC = "Научный"
+
+    @classmethod
+    def default(cls) -> set[str]:
+        return {cls.GENERAL_PURPOSE.value()}
+
+
+class SystemRequirements(ValueObject):
+    """Системные требования.
 
     Attributes:
-        params_count: Количество параметров.
-        max_sequence_length: Максимальная длина контекста.
+        cpu: Количество ядер CPU.
+        ram: Количество ГБ ОЗУ.
+        vram: Количество ГБ оперативной памяти GPU.
+        ssd: Место на SSD диске в ГБ.
     """
 
-    unit_of_params: Literal["M", "B"]
-    params_count: PositiveInt
-    max_sequence_length: PositiveInt
+    cpu: PositiveInt
+    ram: Decimal
+    vram: Decimal
+    ssd: Decimal

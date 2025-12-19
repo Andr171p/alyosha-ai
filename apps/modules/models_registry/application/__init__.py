@@ -1,7 +1,7 @@
 __all__ = (
-    "CreateEntryUseCase",
+    "AddLLMToRegistryUseCase",
     "RegistryRepository",
 )
 
 from .repository import RegistryRepository
-from .usecases import CreateEntryUseCase
+from .usecases import AddLLMToRegistryUseCase

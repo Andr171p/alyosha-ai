@@ -1,7 +1,18 @@
 __all__ = (
-    "CreateEntryCommand",
-    "ModelEntry",
+    "AddAnyLLMToRegistryCommand",
+    "AddCommercialLLMToRegistryCommand",
+    "AddLLMToRegistryCommand",
+    "AddOpenSourceLLMToRegistryCommand",
+    "AnyLLM",
+    "CommercialLLM",
+    "LLMsRegistryItems",
+    "OpenSourceLLM",
 )
 
-from .commands import CreateEntryCommand
-from .entities import ModelEntry
+from .commands import (
+    AddAnyLLMToRegistryCommand,
+    AddCommercialLLMToRegistryCommand,
+    AddLLMToRegistryCommand,
+    AddOpenSourceLLMToRegistryCommand,
+)
+from .entities import AnyLLM, CommercialLLM, LLMsRegistryItems, OpenSourceLLM

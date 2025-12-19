@@ -16,6 +16,12 @@ from modules.iam.infrastructure.database import (
     UserModel,
     SocialAccountModel,
 )
+from modules.models_registry.infrastructure.database import (
+    BaseLLMModel,
+    CommercialLLMModel,
+    OpenSourceLLMModel,
+    RatingModel,
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

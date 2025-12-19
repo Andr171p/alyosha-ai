@@ -48,9 +48,13 @@ class SQLAlchemyRepository[EntityT: Entity, ModelT: Base]:
             await self.session.refresh(model)
             return self.data_mapper.model_to_entity(model)
         except IntegrityError as e:
-            raise ConflictError(entity_name=self.entity.__name__, original_error=e) from e
+            raise ConflictError(
+                entity_name=self.entity.__class__.__name__, original_error=e
+            ) from e
         except SQLAlchemyError as e:
-            raise CreationError(entity_name=self.entity.__name__, original_error=e) from e
+            raise CreationError(
+                entity_name=self.entity.__class__.__name__, original_error=e
+            ) from e
 
     async def read(self, id: UUID) -> EntityT | None:  # noqa: A002
         try:
@@ -60,7 +64,7 @@ class SQLAlchemyRepository[EntityT: Entity, ModelT: Base]:
             return self.data_mapper.model_to_entity(model) if model else None
         except SQLAlchemyError as e:
             raise ReadingError(
-                entity_id=id, entity_name=self.entity.__name__, original_error=e
+                entity_id=id, entity_name=self.entity.__class__.__name__, original_error=e
             ) from e
 
     async def read_all(self, pagination: Pagination) -> list[EntityT]:
@@ -76,7 +80,7 @@ class SQLAlchemyRepository[EntityT: Entity, ModelT: Base]:
             return [self.data_mapper.model_to_entity(model) for model in models]
         except SQLAlchemyError as e:
             raise ReadingError(
-                entity_name=self.entity.__name__,
+                entity_name=self.entity.__class__.__name__,
                 entity_id="*",
                 details={"page": pagination.page, "limit": pagination.limit},
                 original_error=e
@@ -94,10 +98,12 @@ class SQLAlchemyRepository[EntityT: Entity, ModelT: Base]:
             model = result.scalar_one_or_none()
             return self.data_mapper.model_to_entity(model) if model else None
         except IntegrityError as e:
-            raise ConflictError(entity_name=self.entity.__name__, original_error=e) from e
+            raise ConflictError(
+                entity_name=self.entity.__class__.__name__, original_error=e
+            ) from e
         except SQLAlchemyError as e:
             raise UpdateError(
-                entity_id=id, entity_name=self.entity.__name__, original_error=e
+                entity_id=id, entity_name=self.entity.__class__.__name__, original_error=e
             ) from e
 
     async def delete(self, id: UUID) -> bool:  # noqa: A002
@@ -106,7 +112,7 @@ class SQLAlchemyRepository[EntityT: Entity, ModelT: Base]:
             result = await self.session.execute(stmt)
         except SQLAlchemyError as e:
             raise DeleteError(
-                entity_id=id, entity_name=self.entity.__name__, original_error=e
+                entity_id=id, entity_name=self.entity.__class__.__name__, original_error=e
             ) from e
         else:
             return result.rowcount > 0

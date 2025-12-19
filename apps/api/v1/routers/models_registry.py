@@ -1,11 +1,14 @@
+from uuid import UUID
+
 from dishka.integrations.fastapi import DishkaRoute, FromDishka
 from fastapi import APIRouter, Depends, status
 
 from api.dependencies import PaginationDep
 from modules.iam.domain import UserRole
 from modules.iam.infrastructure.fastapi import require_user_roles
-from modules.models_registry.application import CreateEntryUseCase, RegistryRepository
-from modules.models_registry.domain import CreateEntryCommand, ModelEntry
+from modules.models_registry.application import AddLLMToRegistryUseCase, RegistryRepository
+from modules.models_registry.domain import AddAnyLLMToRegistryCommand, AnyLLM
+from modules.shared_kernel.application.exceptions import NotFoundError
 
 router = APIRouter(prefix="/models-registry", tags=["Models registry"], route_class=DishkaRoute)
 
@@ -16,26 +19,43 @@ REQUIRED_ROLES_FOR_MODIFY_CATALOG = {
 
 
 @router.post(
-    path="/entries",
+    path="",
     status_code=status.HTTP_201_CREATED,
-    response_model=ModelEntry,
-    dependencies=[Depends(require_user_roles(*REQUIRED_ROLES_FOR_MODIFY_CATALOG))],
+    response_model=AnyLLM,
+    # dependencies=[Depends(require_user_roles(*REQUIRED_ROLES_FOR_MODIFY_CATALOG))],
     summary="Запись модели в каталог",
 )
-async def create_model_entry(
-        command: CreateEntryCommand, usecase: FromDishka[CreateEntryUseCase]
-) -> ModelEntry:
+async def add_llm_to_registry(
+        command: AddAnyLLMToRegistryCommand, usecase: FromDishka[AddLLMToRegistryUseCase]
+) -> AnyLLM:
     return await usecase.execute(command)
 
 
 @router.get(
     path="",
     status_code=status.HTTP_200_OK,
-    response_model=list[ModelEntry],
+    response_model=list[AnyLLM],
     summary="Просмотр каталога",
     description="Записи сортируются по популярности",
 )
-async def get_most_popular_registry_entries(
+async def get_most_popular_llms(
         pagination: PaginationDep, repository: FromDishka[RegistryRepository]
-) -> list[ModelEntry]:
+) -> list[AnyLLM]:
     return await repository.get_most_popular(pagination)
+
+
+@router.get(
+    path="/{llm_id}",
+    status_code=status.HTTP_200_OK,
+    response_model=AnyLLM,
+    summary="Получить конкретную LLM"
+)
+async def get_llm(llm_id: UUID, repository: FromDishka[RegistryRepository]) -> AnyLLM:
+    llm = await repository.read(llm_id)
+    if llm is None:
+        raise NotFoundError(
+            f"LLM not found in registry by ID {llm_id}",
+            entity_name="LLM",
+            details={"llm_id": llm_id}
+        )
+    return llm
