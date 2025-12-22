@@ -6,7 +6,11 @@ from fastapi import APIRouter, Depends, status
 from api.dependencies import PaginationDep
 from modules.iam.domain import UserRole
 from modules.iam.infrastructure.fastapi import require_user_roles
-from modules.llm_catalog.application import AddLLMToCatalogUseCase, CatalogRepository
+from modules.llm_catalog.application import (
+    AddLLMToCatalogUseCase,
+    CatalogRepository,
+    SearchLLMsInCatalogQuery,
+)
 from modules.llm_catalog.domain import AddAnyLLMToCatalogCommand, AnyLLM
 from modules.shared_kernel.application.exceptions import NotFoundError
 
@@ -44,6 +48,18 @@ async def get_most_popular_llms(
     return await repository.get_most_popular(pagination)
 
 
+@router.post(
+    path="/search",
+    status_code=status.HTTP_200_OK,
+    response_model=list[AnyLLM],
+    summary="Поиск LLM моделей в каталоге"
+)
+async def search_llms(
+        query: SearchLLMsInCatalogQuery, repository: FromDishka[CatalogRepository]
+) -> list[AnyLLM]:
+    return await repository.search_by_filters(filters=query.filters, pagination=query.pagination)
+
+
 @router.get(
     path="/{llm_id}",
     status_code=status.HTTP_200_OK,
@@ -59,3 +75,13 @@ async def get_llm(llm_id: UUID, repository: FromDishka[CatalogRepository]) -> An
             details={"llm_id": llm_id}
         )
     return llm
+
+
+@router.delete(
+    path="/{llm_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_user_roles(*REQUIRED_ROLES_FOR_MODIFY_CATALOG))],
+    summary="Удаление LLM из каталога"
+)
+async def delete_llm(llm_id: UUID, repository: FromDishka[CatalogRepository]) -> None:
+    await repository.delete(llm_id)

@@ -1,6 +1,6 @@
 from typing import TypeVar
 
-from sqlalchemy import desc, select
+from sqlalchemy import and_, desc, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
@@ -8,7 +8,7 @@ from modules.shared_kernel.application import Pagination
 from modules.shared_kernel.application.exceptions import ReadingError
 from modules.shared_kernel.insrastructure.database import DataMapper, SQLAlchemyRepository
 
-from ...application import CatalogRepository
+from ...application import CatalogRepository, LLMFilters
 from ...domain import AnyLLM, CommercialLLM, OpenSourceLLM
 from .models import BaseLLMModel, CommercialLLMModel, OpenSourceLLMModel, RatingModel
 
@@ -107,5 +107,50 @@ class SQLAlchemyCatalogRepository(SQLAlchemyRepository[AnyLLM, AnyLLMModel], Cat
                 entity_name="LLM",
                 entity_id="*",
                 details={**pagination.model_dump()},
+                original_error=e
+            ) from e
+
+    async def search_by_filters(
+            self, filters: LLMFilters, pagination: Pagination
+    ) -> list[AnyLLM]:
+        try:
+            stmt = (
+                select(self.model)
+                .join(RatingModel, self.model.id == RatingModel.llm_id)
+                .options(selectinload(self.model.rating))
+            )
+            conditions = []
+            if filters.categories:
+                conditions.append(self.model.category.in_(filters.categories))
+            if filters.size_types:
+                conditions.append(self.model.size_type.in_(filters.size_types))
+            if filters.min_params is not None:
+                conditions.append(self.model.billion_params_count >= filters.min_params)
+            if filters.max_params is not None:
+                conditions.append(self.model.billion_params_count <= filters.max_params)
+            # if filters.capabilities:
+            #    conditions.append(self.model.capabilities.contains(filters.capabilities))
+            if filters.modalities:
+                conditions.append(self.model.modality.in_(filters.modalities))
+            if filters.provider_names:
+                conditions.append(self.model.provider_name.in_(filters.provider_names))
+            if conditions:
+                stmt = stmt.where(and_(*conditions))
+            stmt = (
+                stmt
+                .order_by(RatingModel.count_of_usage.desc())
+                .offset(pagination.offset)
+                .limit(pagination.limit)
+            )
+            results = await self.session.execute(stmt)
+            models = results.scalars().all()
+            return [
+                self.data_mapper.model_to_entity(model) for model in models
+            ]
+        except SQLAlchemyError as e:
+            raise ReadingError(
+                entity_name="LLM",
+                entity_id="*",
+                details={**filters.model_dump(), **pagination.model_dump()},
                 original_error=e
             ) from e

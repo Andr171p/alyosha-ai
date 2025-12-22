@@ -5,8 +5,12 @@ __all__ = (
     "AddOpenSourceLLMToCatalogCommand",
     "AnyLLM",
     "CommercialLLM",
+    "LLMCategory",
     "LLMsRegistryItems",
+    "ModalityType",
+    "ModelCapability",
     "OpenSourceLLM",
+    "SizeType",
 )
 
 from .commands import (
@@ -16,3 +20,4 @@ from .commands import (
     AddOpenSourceLLMToCatalogCommand,
 )
 from .entities import AnyLLM, CommercialLLM, LLMsRegistryItems, OpenSourceLLM
+from .value_objects import LLMCategory, ModalityType, ModelCapability, SizeType
