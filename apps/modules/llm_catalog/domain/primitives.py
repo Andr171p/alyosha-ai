@@ -2,7 +2,7 @@ from typing import ClassVar
 
 import re
 
-from modules.shared_kernel.domain import StrPrimitive
+from modules.shared_kernel.domain import IntPrimitive, StrPrimitive
 
 
 class ModelSlug(StrPrimitive):
@@ -30,3 +30,20 @@ class ModelSlug(StrPrimitive):
                 f"Invalid model slug format. Must match: {cls.SLUG_PATTERN}. Got: {slug}"
             )
         return slug
+
+
+class FeedbackRating(IntPrimitive):
+    """Примитив для валидации значения рейтинга, который поставил пользователь"""
+
+    MIN_RATING: ClassVar[int] = 1
+    MAX_RATING: ClassVar[int] = 5
+
+    @classmethod
+    def validate(cls, rating: int, *args, **kwargs) -> int:  # noqa: ARG003
+        if rating < cls.MIN_RATING or rating > cls.MAX_RATING:
+            raise ValueError(
+                f"""Invalid feedback rating: {rating}.
+                Rating value must be between {cls.MIN_RATING} and {cls.MAX_RATING}!.
+                """
+            )
+        return rating

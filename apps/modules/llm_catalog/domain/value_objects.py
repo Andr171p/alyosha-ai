@@ -1,4 +1,3 @@
-from decimal import Decimal
 from enum import StrEnum
 
 from pydantic import NonNegativeInt, PositiveInt
