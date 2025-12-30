@@ -5,6 +5,7 @@ from pydantic import SecretStr
 
 from modules.iam.domain.exceptions import PermissionDeniedError
 from modules.shared_kernel.application import UnitOfWork
+from modules.shared_kernel.application.exceptions import NotFoundError
 
 from ..domain import SecretReference, StoreSecretCommand
 from ..utils import string_encryptor
@@ -39,11 +40,20 @@ class SecretManagementService:
 
     async def reveal_secret(self, secret_id: UUID, user_id: UUID) -> SecretRevealed:
         encrypted_secret = await self._repository.read(secret_id)
+        if encrypted_secret is None:
+            raise NotFoundError(
+                f"Secret with ID {secret_id} does not exist!",
+                entity_name="Secret",
+                details={"secret_id": secret_id, "user_id": user_id},
+            )
         if user_id != encrypted_secret.user_id:
-            raise PermissionDeniedError("Access denied!", details={"user_id": user_id})
+            raise PermissionDeniedError(
+                "Access denied!",
+                details={"secret_owner": encrypted_secret.user_id, "user_id": user_id}
+            )
         decrypted_data = string_encryptor.decrypt(
             encrypted_string=encrypted_secret.encrypted_data,
-            context=json.dumps(encrypted_secret.encryption_context)
+            expected_context=json.dumps(encrypted_secret.encryption_context)
         )
         return SecretRevealed(
             id=encrypted_secret.id,
