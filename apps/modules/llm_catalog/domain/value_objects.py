@@ -1,107 +1,121 @@
+from typing import ClassVar
+
 from enum import StrEnum
 
-from pydantic import NonNegativeInt, PositiveInt
+from pydantic import (
+    Field,
+    NonNegativeFloat,
+    NonNegativeInt,
+    PositiveInt,
+    computed_field,
+)
+from pydantic_extra_types.currency_code import Currency
 
 from modules.shared_kernel.domain import ValueObject
 
 
+class CardStatus(StrEnum):
+    """Статус карточки.
+
+    Attributes:
+        PENDING: После заполнения карточки она (требует модерации и валидации).
+        ACTIVE: Карточку можно отобразить пользователю.
+        DEPRECATED: Карточка устарела (не показывать пользователю).
+    """
+
+    PENDING = "pending"
+    ACTIVE = "active"
+    DEPRECATED = "deprecated"
+
+
 class LLMCategory(StrEnum):
+    """Разделение LLM на 2 основные категории:
+        - `open-source`: есть возможность локальной установки.
+        - `commercial`: доступны по подписке через API.
+     """
+
     OPEN_SOURCE = "open-source"
     COMMERCIAL = "commercial"
 
 
-class DeploymentType(StrEnum):
-    """Тип развёртывания модели"""
+class BillingTier(ValueObject):
+    """Рассчитан для модели тарификации - `pay-as-you-go`"""
 
-    LOCAL = "local"
-    CLOUD = "cloud"
-
-
-class SizeType(StrEnum):
-    """Категории LLM по размеру.
-
-    Attributes:
-        TINY: Малые модели 1B-3B параметров.
-        SMALL: Маленькие модели 7B-14B параметров.
-        MEDIUM: Средние 20B-70B параметров.
-        LARGE: Большие 130B-400B+ параметров.
-    """
-
-    TINY = "tiny"
-    SMALL = "small"
-    MEDIUM = "medium"
-    LARGE = "large"
+    generation_cost_per_1k_tokens: NonNegativeFloat = Field(
+        ..., description="Цена генерации 1000 токенов в валюте из поля `currency`"
+    )
+    currency: Currency = Field(..., description="Валюта в которой происходит расчёт")
+    localized_price: NonNegativeFloat = Field(..., description="Цена относительно местного курса")
 
 
-class Rating(ValueObject):
-    """Рейтинг модели"""
+class HardwareRequirements(ValueObject):
+    """Требования к 'железу'"""
 
-    count_of_usage: NonNegativeInt
-    stars: NonNegativeInt
-
-
-class TariffMethod(StrEnum):
-    """Метод тарификации облачных решений.
-
-    Attributes:
-        PAY_AS_YOU_GO: На основе токенов (оплата по факту использования).
-        SAAS: Подписка с фиксированной оплатой.
-        SPOT_INSTANCE: На основе инфраструктуры (почасовая оплата GPU).
-    """
-
-    PAY_AS_YOU_GO = "pay-as-you-go"
-    SAAS = "SaaS"
-    SPOT_INSTANCE = "spot-instance"
+    min_memory_gb: PositiveInt
+    min_vram_gb: NonNegativeInt
+    recommended_gpu: set[str] = Field(default_factory=set, examples=["RTX 4090", "A100"])
+    cpu_requirements: str = Field(..., examples=["x86_64 with AVX2"])
+    disk_space_gb: PositiveInt
 
 
-class ModelCapability(StrEnum):
-    """Возможности модели"""
+class PerformanceCharacteristics(ValueObject):
+    """Измеряемые метрики"""
 
-    TEXT_GENERATION = "text_generation"
-    CODE_GENERATION = "code_generation"
-    VISION = "vision"
-    TRANSLATION = "translation"
-    REASONING = "reasoning"
-    SUMMARIZATION = "summarization"
+    TOKENS_ON_PAGE: ClassVar[int] = 2000
+
+    billion_params_count: PositiveInt = Field(..., description="Количество параметров LLM")
+    context_window_tokens: PositiveInt = Field(..., description="Длина контекста в токенах")
+
+    @computed_field(description="User-friendly формат (контекстное окно - количество страниц")
+    def context_window_pages(self) -> PositiveInt:
+        return self.context_window_tokens / self.TOKENS_ON_PAGE
 
 
-class ModalityType(StrEnum):
-    """Модальность модели (с какими данными работает модель)"""
+class Modality(StrEnum):
+    """Виды модальностей"""
 
     TEXT = "text"
-    CODE = "code"
-    IMAGE = "image"
+    VISION = "vision"
     AUDIO = "audio"
     VIDEO = "video"
     MULTIMODAL = "multimodal"
 
 
-class TargetDomain(StrEnum):
-    """Доменные области для спецификации модели"""
+class Capabilities(ValueObject):
+    """Возможности LLM"""
 
-    GENERAL_PURPOSE = "Общего назначения"
-    CODE_GENERATION = "Генерация кода"
-    MEDICAL = "Медицина"
-    LEGAL = "Юридический"
-    FINANCIAL = "Финансовый"
-    SCIENTIFIC = "Научный"
+    languages: set[str] = Field(
+        default_factory=set,
+        description="Основные языки, которые поддерживает LLM",
+        examples=["ru", "en"]
+    )
+    modalities: set[Modality] = Field(
+        default_factory=set, description="Модальности (типы данных) с которыми работает LLM"
+    )
+    features: set[str] = Field(
+        default_factory=set,
+        description="Технические возможности LLM",
+        examples=["FUNCTION_CALLING", "JSON_MODE", "STREAMING", "REASONING"]
+    )
 
-    @classmethod
-    def default(cls) -> set[str]:
-        return {cls.GENERAL_PURPOSE.value()}
+
+class ExamplePrompt(ValueObject):
+    """Простой пример промпта для LLM"""
+
+    task: str
+    example_input: str
+    example_output: str
 
 
-class SystemRequirements(ValueObject):
-    """Системные требования.
+class BusinessPresentation(ValueObject):
+    """Удобная бизнес интерпретация LLM"""
 
-    Attributes:
-        cpu: Количество ядер CPU.
-        ram: Количество ГБ ОЗУ.
-        vram: Количество ГБ оперативной памяти GPU.
-        ssd: Место на SSD диске в ГБ.
-    """
-
-    cpu: PositiveInt
-    ram: PositiveInt
-    vram: PositiveInt
-    ssd: PositiveInt
+    use_case_tags: set[str] = Field(
+        default_factory=set, examples=["АНАЛИЗ_ДОКУМЕНТОВ", "ЧАТ_ПОДДЕРЖКА"]
+    )
+    industry_tags: set[str] = Field(
+        default_factory=set, examples=["ФИНТЕХ", "РИТЕЙЛ", "ГОС_СЕКТОР"]
+    )
+    tagline: str = Field(
+        ..., description="Слоган модели", examples=["Лучшая модель для анализа на русском"]
+    )

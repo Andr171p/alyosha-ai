@@ -1,99 +1,73 @@
-from typing import TypeVar
-
-from sqlalchemy import and_, desc, select
+from pydantic import HttpUrl
+from sqlalchemy import desc, select
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import selectinload
 
 from modules.shared_kernel.application import Pagination
 from modules.shared_kernel.application.exceptions import ReadingError
 from modules.shared_kernel.insrastructure.database import DataMapper, SQLAlchemyRepository
 
 from ...application import CatalogRepository, LLMFilters
-from ...domain import AnyLLM, CommercialLLM, OpenSourceLLM
-from .models import BaseLLMModel, CommercialLLMModel, OpenSourceLLMModel, RatingModel
-
-AnyLLMModel = TypeVar("AnyLLMModel", bound=BaseLLMModel | CommercialLLMModel | OpenSourceLLMModel)
+from ...domain import CardStatus, LLMCard, LLMCategory
+from .models import LLMCardModel, UserFeedbackModel
 
 
-class LLMDataMapper(DataMapper[AnyLLM, AnyLLMModel]):
+class LLMCardDataMapper(DataMapper[LLMCard, LLMCardModel]):
     @classmethod
-    def model_to_entity(cls, model: AnyLLMModel) -> AnyLLM:
-        values = {
-            "id": model.id,
-            "slug": model.slug,
-            "name": model.name,
-            "provider_name": model.provider_name,
-            "source_url": str(model.source_url),
-            "release_date": model.release_date,
-            "description": model.description,
-            "size_type": model.size_type,
-            "billion_params_count": model.billion_params_count,
-            "context_window_tokens": model.context_window_tokens,
-            "category": model.category,
-            "capabilities": model.capabilities,
-            "modality": model.modality,
-            "target_domains": model.target_domains,
-            "rating": {
-                "count_of_usage": model.rating.count_of_usage,
-                "stars": model.rating.stars,
-            },
-            "created_at": model.created_at,
-        }
-        if isinstance(model, OpenSourceLLMModel):
-            values.update({
-                "min_system_requirements": model.min_system_requirements,
-                "recommended_system_requirements": model.recommended_system_requirements
-            })
-            return OpenSourceLLM.model_validate(values)
-        values.update({"tariff_method": model.tariff_method})
-        return CommercialLLM.model_validate(values)
+    def model_to_entity(cls, model: LLMCardModel) -> LLMCard:
+        return LLMCard(
+            id=model.id,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+            status=CardStatus(model.status),
+            category=LLMCategory(model.category),
+            name=model.name,
+            slug=model.slug,
+            family=model.family,
+            description=model.description,
+            tags=model.tags,
+            provider_name=model.provider_name,
+            source_url=HttpUrl(model.source_url),
+            capabilities=model.capabilities,
+            performance_characteristics=model.performance_characteristics,
+            business_presentation=model.business_presentation,
+            hardware_requirements=model.hardware_requirements,
+            billing_tier=model.billing_tier,
+        )
 
     @classmethod
-    def entity_to_model(cls, entity: AnyLLM) -> AnyLLMModel:
-        values = {
-            "id": entity.id,
-            "slug": entity.slug,
-            "name": entity.name,
-            "provider_name": entity.provider_name,
-            "source_url": str(entity.source_url),
-            "release_date": entity.release_date,
-            "description": entity.description,
-            "size_type": entity.size_type,
-            "billion_params_count": entity.billion_params_count,
-            "context_window_tokens": entity.context_window_tokens,
-            "category": entity.category,
-            "capabilities": list(entity.capabilities),
-            "modality": entity.modality,
-            "target_domains": list(entity.target_domains),
-            "rating": RatingModel(
-                llm_id=entity.id,
-                count_of_usage=entity.rating.count_of_usage,
-                stars=entity.rating.stars,
-            ),
-            "created_at": entity.created_at,
-        }
-        if isinstance(entity, OpenSourceLLM):
-            values.update({
-                "min_system_requirements": entity.min_system_requirements.model_dump(),
-                "recommended_system_requirements": entity.recommended_system_requirements.model_dump(),  # noqa: E501
-            })
-            return OpenSourceLLMModel(**values)
-        values.update({"tariff_method": entity.tariff_method})
-        return CommercialLLMModel(**values)
+    def entity_to_model(cls, entity: LLMCard) -> LLMCardModel:
+        return LLMCardModel(
+            id=entity.id,
+            created_at=entity.created_at,
+            updated_at=entity.updated_at,
+            status=entity.status.value(),
+            category=entity.category.value(),
+            name=entity.name,
+            slug=entity.slug,
+            family=entity.family,
+            description=entity.description,
+            tags=entity.tags,
+            provider_name=entity.provider_name,
+            source_url=str(entity.source_url),
+            capabilities=entity.capabilities,
+            performance_characteristics=entity.performance_characteristics,
+            business_presentation=entity.business_presentation,
+            hardware_requirements=entity.hardware_requirements,
+            billing_tier=entity.billing_tier,
+        )
 
 
-class SQLAlchemyCatalogRepository(SQLAlchemyRepository[AnyLLM, AnyLLMModel], CatalogRepository):
-    entity = AnyLLM
-    model = BaseLLMModel
-    data_mapper = LLMDataMapper
+class SQLAlchemyCatalogRepository(SQLAlchemyRepository[LLMCard, LLMCardModel], CatalogRepository):
+    entity = LLMCard
+    model = LLMCardModel
+    data_mapper = LLMCardDataMapper
 
-    async def get_most_popular(self, pagination: Pagination) -> list[AnyLLM]:
+    async def get_most_popular(self, pagination: Pagination) -> list[LLMCard]:
         try:
             stmt = (
                 select(self.model)
-                .join(RatingModel, self.model.id == RatingModel.llm_id)
-                .options(selectinload(self.model.rating))
-                .order_by(desc(RatingModel.count_of_usage))
+                .join(UserFeedbackModel, self.model.id == UserFeedbackModel.llm_card_id)
+                .order_by(desc(UserFeedbackModel.rating))
                 .offset(pagination.offset)
                 .limit(pagination.limit)
             )
@@ -104,7 +78,7 @@ class SQLAlchemyCatalogRepository(SQLAlchemyRepository[AnyLLM, AnyLLMModel], Cat
             ]
         except SQLAlchemyError as e:
             raise ReadingError(
-                entity_name="LLM",
+                entity_name=self.entity.__class__.__name__,
                 entity_id="*",
                 details={**pagination.model_dump()},
                 original_error=e
@@ -112,44 +86,12 @@ class SQLAlchemyCatalogRepository(SQLAlchemyRepository[AnyLLM, AnyLLMModel], Cat
 
     async def search_by_filters(
             self, filters: LLMFilters, pagination: Pagination
-    ) -> list[AnyLLM]:
+    ) -> list[LLMCard]:
         try:
-            stmt = (
-                select(self.model)
-                .join(RatingModel, self.model.id == RatingModel.llm_id)
-                .options(selectinload(self.model.rating))
-            )
-            conditions = []
-            if filters.categories:
-                conditions.append(self.model.category.in_(filters.categories))
-            if filters.size_types:
-                conditions.append(self.model.size_type.in_(filters.size_types))
-            if filters.min_params is not None:
-                conditions.append(self.model.billion_params_count >= filters.min_params)
-            if filters.max_params is not None:
-                conditions.append(self.model.billion_params_count <= filters.max_params)
-            # if filters.capabilities:
-            #    conditions.append(self.model.capabilities.contains(filters.capabilities))
-            if filters.modalities:
-                conditions.append(self.model.modality.in_(filters.modalities))
-            if filters.provider_names:
-                conditions.append(self.model.provider_name.in_(filters.provider_names))
-            if conditions:
-                stmt = stmt.where(and_(*conditions))
-            stmt = (
-                stmt
-                .order_by(RatingModel.count_of_usage.desc())
-                .offset(pagination.offset)
-                .limit(pagination.limit)
-            )
-            results = await self.session.execute(stmt)
-            models = results.scalars().all()
-            return [
-                self.data_mapper.model_to_entity(model) for model in models
-            ]
+            return ...
         except SQLAlchemyError as e:
             raise ReadingError(
-                entity_name="LLM",
+                entity_name=self.entity.__class__.__name__,
                 entity_id="*",
                 details={**filters.model_dump(), **pagination.model_dump()},
                 original_error=e

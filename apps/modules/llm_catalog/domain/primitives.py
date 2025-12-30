@@ -2,7 +2,7 @@ from typing import ClassVar
 
 import re
 
-from modules.shared_kernel.domain import IntPrimitive, StrPrimitive
+from modules.shared_kernel.domain import FloatPrimitive, StrPrimitive
 
 
 class ModelSlug(StrPrimitive):
@@ -32,7 +32,7 @@ class ModelSlug(StrPrimitive):
         return slug
 
 
-class FeedbackRating(IntPrimitive):
+class FeedbackRating(FloatPrimitive):
     """Примитив для валидации значения рейтинга, который поставил пользователь"""
 
     MIN_RATING: ClassVar[int] = 1

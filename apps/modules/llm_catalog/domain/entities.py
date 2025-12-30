@@ -1,108 +1,59 @@
-from typing import Self, TypeVar
+from typing import Self
 
-from abc import ABC
-from datetime import datetime
+from uuid import UUID
 
-from pydantic import Field, HttpUrl, PositiveInt
+from pydantic import HttpUrl, ValidationError, model_validator
 
 from modules.shared_kernel.domain import Entity
 
-from .commands import AddLLMToCatalogCommand
-from .primitives import ModelSlug
+from .primitives import FeedbackRating
 from .value_objects import (
+    BillingTier,
+    BusinessPresentation,
+    Capabilities,
+    CardStatus,
+    HardwareRequirements,
     LLMCategory,
-    ModalityType,
-    ModelCapability,
-    Rating,
-    SizeType,
-    SystemRequirements,
-    TargetDomain,
-    TariffMethod,
+    PerformanceCharacteristics,
 )
 
 
-class BaseLLM(Entity, ABC):
-    """Базовая LLM из общего каталога моделей.
+class UserFeedback(Entity):
+    """Оценка пользователя на модель из каталога"""
 
-    Attributes:
-        slug: Идентификатор модели, например: `google/gemma-7b`.
-        name: Название модели.
-        provider_name: Название поставщика модели.
-        source_url: URL адрес источника LLM.
-        release_date: Дата релиза.
-        description: Описание модели.
-        size_type: Тип модели по её размеру.
-        billion_params_count: Количество параметров LLM в `B`.
-        context_window_tokens: Размер контекстного окна в токенах.
-        category: Категория `open-source` и `commercial`.
-        capabilities: Список возможностей модели.
-        modality: Модальность с которой работает LLM.
-        target_domains: Список областей для которых подходит модель.
-        rating: Рейтинг модели (ставят пользователи).
-    """
+    llm_card_id: UUID
+    user_id: UUID
+    rating: FeedbackRating
+    review: str
+    verified_usage: bool
 
-    slug: ModelSlug
+
+class LLMCard(Entity):
+    status: CardStatus
+    category: LLMCategory
     name: str
+    slug: str
+    family: str
+    description: str
+    tags: set[str]
     provider_name: str
     source_url: HttpUrl
-    release_date: datetime | None = None
-    description: str
-    size_type: SizeType
-    billion_params_count: PositiveInt
-    context_window_tokens: PositiveInt
-    category: LLMCategory
-    capabilities: set[ModelCapability] = Field(default_factory=set)
-    modality: ModalityType
-    target_domains: set[str] = Field(default_factory=TargetDomain.default)
-    rating: Rating
+    capabilities: Capabilities
+    performance_characteristics: PerformanceCharacteristics
+    business_presentation: BusinessPresentation
+    hardware_requirements: HardwareRequirements | None = None
+    billing_tier: BillingTier | None = None
 
-    @staticmethod
-    def _define_size_type(billion_params_count: int) -> SizeType:
-        """Определение размера модели по количеству параметров"""
+    @model_validator(mode="after")
+    def validate_card_state(self) -> Self:
+        """Проверка валидности карточки LLM"""
 
-        if billion_params_count in range(1, 4):
-            size_type = SizeType.TINY
-        elif billion_params_count in range(7, 15):
-            size_type = SizeType.SMALL
-        elif billion_params_count in range(20, 71):
-            size_type = SizeType.MEDIUM
-        else:
-            size_type = SizeType.LARGE
-        return size_type
-
-    @classmethod
-    def create(cls, command: AddLLMToCatalogCommand) -> Self:
-        return cls.model_validate({
-            **command.model_dump(),
-            "size_type": cls._define_size_type(command.billion_params_count),
-            "rating": Rating(count_of_usage=0, stars=0),
-        })
-
-
-class OpenSourceLLM(BaseLLM):
-    """LLM с открытым исходным кодом, доступна для скачивания и локального развёртывания.
-
-    Attributes:
-        min_system_requirements: Минимальные системные требования.
-        recommended_system_requirements: Рекомендуемые системные требования.
-    """
-
-    category: LLMCategory = Field(default=LLMCategory.OPEN_SOURCE, frozen=True)
-    min_system_requirements: SystemRequirements
-    recommended_system_requirements: SystemRequirements
-
-
-class CommercialLLM(BaseLLM):
-    """LLM для коммерческого использования, доступна только по оплате.
-
-    Attributes:
-        tariff_method: Метод/способ тарификации.
-    """
-
-    category: LLMCategory = Field(default=LLMCategory.COMMERCIAL, frozen=True)
-    tariff_method: TariffMethod
-
-
-AnyLLM = OpenSourceLLM | CommercialLLM
-AnyLLMT = TypeVar("AnyLLMT", bound=AnyLLM)
-LLMsRegistryItems = TypeVar("LLMsRegistryItems", bound=list[AnyLLM])
+        if (
+                self.category == LLMCategory.OPEN_SOURCE and
+                self.billing_tier is not None and
+                self.hardware_requirements is None
+        ):
+            raise ValidationError("Hardware requirements cannot be None for `open-source` LLM!")
+        if self.category == LLMCategory.COMMERCIAL and self.billing_tier is None:
+            raise ValidationError("Billing tier must be provided for `commercial` LLM!")
+        return self

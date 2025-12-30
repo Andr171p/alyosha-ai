@@ -1,19 +1,7 @@
 from modules.shared_kernel.application import UnitOfWork
 
-from ..domain import (
-    AddAnyLLMToCatalogCommand,
-    AddCommercialLLMToCatalogCommand,
-    AnyLLM,
-    CommercialLLM,
-    OpenSourceLLM,
-)
+from ..domain import LLMCard
 from .repository import CatalogRepository
-
-
-def llm_item_factory(command: AddAnyLLMToCatalogCommand) -> AnyLLM:
-    if isinstance(command, AddCommercialLLMToCatalogCommand):
-        return CommercialLLM.create(command)
-    return OpenSourceLLM.create(command)
 
 
 class AddLLMToCatalogUseCase:
@@ -21,10 +9,8 @@ class AddLLMToCatalogUseCase:
         self._uow = uow
         self._repository = repository
 
-    async def execute(self, command: AddAnyLLMToCatalogCommand) -> AnyLLM:
+    async def execute(self, command: ...) -> LLMCard:
         async with self._uow.transactional() as uow:
-            llm = llm_item_factory(command)
-            print(llm)
-            await self._repository.create(llm)
+            await self._repository.create(...)
             await uow.commit()
-        return llm
+        return ...
