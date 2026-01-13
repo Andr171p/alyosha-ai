@@ -1,17 +1,24 @@
 import io
 import logging
+import wave
 from collections.abc import Iterator
-from uuid import UUID
 
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
 from pydub import AudioSegment
 from pydub.utils import make_chunks
 
+from ..bot import bot
 from ..broker import broker
 from ..core import enums, events, schemas
+from ..settings import PROMPTS_DIR, settings
 from ..utils import create_docx_from_markdown, create_pdf_from_markdown
-from . import media as media_service
+from . import media
 
 logger = logging.getLogger(__name__)
+
+ALLOWED_AUDIO_EXTENSIONS = {"wav", "mp3", "m4a", "ogg", "flac"}
 
 
 def _split_audio_on_segments(
@@ -34,14 +41,48 @@ def _split_audio_on_segments(
         )
 
 
+def convert_audio_to_wav(
+        audio_data: bytes,
+        samplerate: int = 44_100,
+        channels: int = 1,
+        sample_width: int = 2,
+) -> bytes:
+    buffer = io.BytesIO()
+    with wave.open(buffer, mode="wb") as wav_file:
+        wav_file.setnchannels(channels)
+        wav_file.setsampwidth(sample_width)
+        wav_file.setframerate(samplerate)
+        wav_file.writeframes(audio_data)
+    buffer.seek(0)
+    return buffer.read()
+
+
+async def download_telegram_audio_files(
+        user_id: int, tg_file_ids: list[str]
+) -> list[schemas.Attachment]:
+    attachments: list[schemas.Attachment] = []
+    for tg_file_id in tg_file_ids:
+        tg_file = await bot.get_file(tg_file_id)
+        tg_file_ext = tg_file.file_path.split(".")[-1]
+        if tg_file_ext not in ALLOWED_AUDIO_EXTENSIONS:
+            raise ValueError(f"Not supported audio format: {tg_file_ext}!")
+        tg_file_buffer = await bot.download_file(destination=io.BytesIO())
+        attachment = await media.upload(
+            user_id=user_id, filename=tg_file.file_path, data=tg_file_buffer.getbuffer()
+        )
+        attachments.append(attachment)
+    return attachments
+
+
 async def create_task(
-        user_id: int, file_ids: list[UUID], output_document_ext: schemas.OutputDocumentExt
-) -> ...:
+        user_id: int, tg_file_ids: list[str], output_document_ext: schemas.OutputDocumentExt
+) -> None:
+    attachments = await download_telegram_audio_files(user_id, tg_file_ids)
     task = schemas.AudioRecognitionTask(
         status=enums.TaskStatus.PENDING, output_document_ext=output_document_ext
     )
-    for file_id in file_ids:
-        file = await media_service.download(file_id)
+    for attachment in attachments:
+        file = await media.download(attachment.id)
         for audio_segment in _split_audio_on_segments(
             audio_data=file.data, audio_format=file.path.split(".")[-1]
         ):
@@ -51,9 +92,26 @@ async def create_task(
             await broker.publish(event, channel="audio:recognize")
 
 
+async def generate(audio_transcription: str) -> str:
+    model = ChatOpenAI(
+        api_key=settings.yandexcloud.apikey,
+        model=settings.yandexcloud.qwen3_235b,
+        base_url=settings.yandexcloud.base_url,
+        temperature=0.2,
+        max_retries=3,
+    )
+    prompt = ChatPromptTemplate.from_template(
+        (PROMPTS_DIR / "minutes_of_meeting_prompt.md").read_text(encoding="utf-8")
+    )
+    chain = prompt | model | StrOutputParser()
+    return await chain.ainvoke({"audio_transcription": audio_transcription})
+
+
 def create_document(md_text: str, output_document_ext: schemas.OutputDocumentExt) -> bytes:
     match output_document_ext:
         case "docx":
             return create_docx_from_markdown(md_text)
         case "pdf":
             return create_pdf_from_markdown(md_text)
+        case _:
+            return ...

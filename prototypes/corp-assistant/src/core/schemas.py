@@ -11,14 +11,22 @@ from ..settings import TIMEZONE
 from ..utils import current_datetime
 from .enums import TaskStatus, UserRole
 
-OutputDocumentExt = Literal["pdf", "docx"]
+OutputDocumentExt = Literal["pdf", "docx", "md"]
 
 
 class User(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     user_id: PositiveInt
     username: str | None = None
+    fist_name: str | None = None
+    last_name: str | None = None
     role: UserRole
     created_at: datetime = Field(default_factory=current_datetime)
+
+    @property
+    def full_name(self) -> str:
+        return f"{self.fist_name} {self.last_name}"
 
 
 class File(BaseModel):

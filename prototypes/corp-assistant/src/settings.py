@@ -56,13 +56,34 @@ class SberDevicesSettings(BaseSettings):
 class ElasticsearchSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="ELASTICSEARCH_")
 
+    @property
+    def url(self) -> str:
+        return ...
+
 
 class PostgresSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="POSTGRES_")
 
+    @property
+    def sqlalchemy_url(self) -> str:
+        return ...
+
 
 class RedisSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="REDIS_")
+
+    @property
+    def url(self) -> str:
+        return ...
+
+
+class AssistantSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="ASSISTANT_")
+
+    name: str = "Алексей"
+    company_name: str = "ДИО-Консалт"
+    company_website: str = "<Web-сайт компании>"
+    company_description: str = "<Описание деятельности компании>"
 
 
 class Settings(BaseSettings):
@@ -72,6 +93,7 @@ class Settings(BaseSettings):
     elasticsearch: ElasticsearchSettings = ElasticsearchSettings()
     postgres: PostgresSettings = PostgresSettings()
     redis: RedisSettings = RedisSettings()
+    assistant: AssistantSettings = AssistantSettings()
 
 
 settings: Final[Settings] = Settings()

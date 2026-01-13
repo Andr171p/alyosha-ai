@@ -6,6 +6,16 @@ from sqlalchemy.orm import Mapped, mapped_column
 from .base import Base
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    user_id: Mapped[int] = mapped_column(BigInteger, unique=True)
+    username: Mapped[str | None] = mapped_column(nullable=True, unique=True)
+    fist_name: Mapped[str | None] = mapped_column(nullable=True)
+    last_name: Mapped[str | None] = mapped_column(nullable=True)
+    role: Mapped[str]
+
+
 class Attachment(Base):
     __tablename__ = "attachments"
 

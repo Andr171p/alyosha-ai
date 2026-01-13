@@ -2,15 +2,15 @@ from aiogram.types import BufferedInputFile
 from faststream import FastStream, Logger
 from faststream.redis import RedisBroker
 
-from .ai_agents.minutes_of_meeting_compiler import agent
-from .bot.bot import bot
+from .bot import bot
 from .core import enums, events, schemas
 from .database import crud, models
 from .integrations import salute_speech
-from .services import minutes_of_meetings as minutes_of_meetings_service
+from .services import minutes_of_meetings
+from .settings import settings
 from .utils import current_datetime
 
-broker = RedisBroker(...)
+broker = RedisBroker(settings.redis.url)
 
 app = FastStream(broker)
 
@@ -65,8 +65,8 @@ async def draw_up_minutes_of_meeting(
     )
     audio_transcription = "\n".join(task.recognition_results)
     logger.info("Start compile minutes of meeting for user `%s`", event.user_id)
-    minutes_of_meeting = await agent.ainvoke({"audio_transcription": audio_transcription})
-    document_data = minutes_of_meetings_service.create_document(
+    minutes_of_meeting = await minutes_of_meetings.generate(audio_transcription)
+    document_data = minutes_of_meetings.create_document(
         md_text=minutes_of_meeting, output_document_ext=event.output_document_ext
     )
     await bot.send_document(
