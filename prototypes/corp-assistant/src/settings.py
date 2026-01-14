@@ -1,4 +1,4 @@
-from typing import Final
+from typing import Final, Literal
 
 from pathlib import Path
 
@@ -56,30 +56,50 @@ class SberDevicesSettings(BaseSettings):
 class ElasticsearchSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="ELASTICSEARCH_")
 
+    host: str = "elasticsearch"
+    port: int = 9200
+    user: str = "<USER>"
+    password: str = "<PASSWORD>"
+
+    @property
+    def auth(self) -> tuple[str, str]:
+        return self.user, self.password
+
     @property
     def url(self) -> str:
-        return ...
+        return f"http://{self.host}:{self.port}/"
 
 
 class PostgresSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="POSTGRES_")
 
+    host: str = "postgres"
+    port: int = 5432
+    user: str = "<USER>"
+    password: str = "<PASSWORD>"
+    db: str = "<DB>"
+    driver: Literal["asyncpg"] = "asyncpg"
+
     @property
     def sqlalchemy_url(self) -> str:
-        return ...
+        return f"postgresql+{self.driver}://{self.user}:{self.password}@{self.host}:{self.port}/{self.db}"
 
 
 class RedisSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="REDIS_")
 
+    host: str = "redis"
+    port: str = 6379
+
     @property
     def url(self) -> str:
-        return ...
+        return f"redis://{self.host}:{self.port}/0"
 
 
 class AssistantSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="ASSISTANT_")
 
+    platform: str = ""
     name: str = "Алексей"
     company_name: str = "ДИО-Консалт"
     company_website: str = "<Web-сайт компании>"

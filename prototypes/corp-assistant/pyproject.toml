@@ -6,6 +6,8 @@ requires-python = ">=3.13"
 dependencies = [
     "aiogram>=3.24.0",
     "aiosqlite>=0.22.1",
+    "alembic>=1.18.0",
+    "asyncpg>=0.31.0",
     "fastapi[all]>=0.128.0",
     "faststream[redis]>=0.6.5",
     "langchain>=1.2.3",
@@ -19,6 +21,7 @@ dependencies = [
     "pydub>=0.25.1",
     "python-magic-bin>=0.4.14",
     "pytz>=2025.2",
+    "sentence-transformers>=5.2.0",
     "sqlalchemy>=2.0.45",
 ]
 
@@ -129,6 +132,7 @@ max-branches = 30
 [tool.mypy]
 ignore_missing_imports = true
 exclude = [
+    "migrations",
     "src/migration",
     "src/migrations",
     "__samples__",

@@ -2,7 +2,6 @@ from aiogram.types import BufferedInputFile
 from faststream import FastStream, Logger
 from faststream.redis import RedisBroker
 
-from .bot import bot
 from .core import enums, events, schemas
 from .database import crud, models
 from .integrations import salute_speech
@@ -17,19 +16,21 @@ app = FastStream(broker)
 
 @broker.subscriber("audio:recognize")
 async def handle_audio_recognize_event(event: events.AudioRecognize, logger: Logger) -> None:
+    from .bot import bot  # noqa: PLC0415
+
     if event.audio_segment.is_first:
         await bot.send_message(
             chat_id=event.user_id, text="Транскрибация вашей аудиозаписи началась..."
         )
-    recognition_result = await salute_speech.recognize_async(
-        audio_data=event.audio_segment.data,
-        audio_encoding="PCM_S16LE",
-        max_speakers_count=10,
-    )
     current_task = await crud.read(
         event.task_id,
         model_class=models.AudioRecognitionTask,
         schema_class=schemas.AudioRecognitionTask
+    )
+    recognition_result = await salute_speech.recognize_async(
+        audio_data=event.audio_segment.data,
+        audio_encoding="PCM_S16LE",
+        max_speakers_count=current_task.max_speakers_count,
     )
     current_task.recognition_results.append(recognition_result)
     await crud.refresh(current_task, model_class=models.AudioRecognitionTask)
@@ -58,13 +59,15 @@ async def handle_audio_recognize_event(event: events.AudioRecognize, logger: Log
 async def draw_up_minutes_of_meeting(
         event: events.MinutesOfMeetingDrawUp, logger: Logger
 ) -> None:
+    from .bot import bot  # noqa: PLC0415
+
     task = await crud.read(
         event.task_id,
         model_class=models.AudioRecognitionTask,
         schema_class=schemas.AudioRecognitionTask
     )
     audio_transcription = "\n".join(task.recognition_results)
-    logger.info("Start compile minutes of meeting for user `%s`", event.user_id)
+    logger.info("Start compiling minutes of meeting for user `%s`", event.user_id)
     minutes_of_meeting = await minutes_of_meetings.generate(audio_transcription)
     document_data = minutes_of_meetings.create_document(
         md_text=minutes_of_meeting, output_document_ext=event.output_document_ext

@@ -1,19 +1,26 @@
+import logging
 from enum import StrEnum
 
 from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums.parse_mode import ParseMode
 from aiogram.filters import CommandStart
 from aiogram.filters.callback_data import CallbackData
-from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import InlineKeyboardMarkup, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from .ai_agent import Context, call_agent
 from .core.enums import UserRole
 from .services import users
 from .settings import settings
+from .utils import current_datetime, escape_md2
 
-bot = Bot(token=settings.bot.token)
+logger = logging.getLogger(__name__)
 
-dp = Dispatcher(bot)
+bot = Bot(token=settings.bot.token, default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN_V2))
+
+dp = Dispatcher(storage=MemoryStorage())
 
 
 class Vote(StrEnum):
@@ -21,7 +28,7 @@ class Vote(StrEnum):
     DISLIKE = "dislike"
 
 
-class VoteCBData(CallbackData):
+class VoteCBData(CallbackData, prefix="vote"):
     user_id: int
     message_id: int
     vote: Vote
@@ -39,7 +46,7 @@ def get_voting_kb(user_id: int, message_id: int) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def get_admin_kb(user_id: int) -> InlineKeyboardMarkup: ...
+def get_admin_menu_kb(user_id: int) -> InlineKeyboardMarkup: ...
 
 
 @dp.message(CommandStart())
@@ -52,32 +59,31 @@ async def handle_start_cmd(message: Message) -> None:
             first_name=message.from_user.first_name,
             last_name=message.from_user.last_name,
         )
-        await message.reply("")
+        await message.reply(f"Привет **{saved_user.fist_name}**")
         return
     if existing_user.role in {UserRole.ADMIN, UserRole.MODERATOR}:
-        await message.reply("", reply_markup=...)
-    await message.reply("")
+        await message.reply("...")
+    await message.reply(f"С возвращением **{existing_user.fist_name}**")
 
 
 @dp.message()
 async def handle_any_message(message: Message) -> None:
-    tg_file_ids: set[str] = set()
+    tg_file_id: str | None = None
     if message.audio is not None:
-        tg_file_ids.add(message.audio.file_id)
+        tg_file_id = message.audio.file_id
     if message.voice is not None:
-        tg_file_ids.add(message.voice.file_id)
+        tg_file_id = message.voice.file_id
     user = await users.get_by_user_id(message.from_user.id)
     ai_message = await call_agent(
-        thread_id=f"{message.from_user.id}",
-        human_text=message.text,
+        message_text=message.text or f"Создай протокол совещания для файла {tg_file_id}",
         context=Context(
-            user_id=user.user_id, full_name=user.full_name, user_role=user.role
+            user_id=user.user_id, first_name=user.fist_name, user_role=user.role
         ),
-        tg_file_ids=list(tg_file_ids)
+        tg_user_message={
+            "tg_message_id": message.message_id,
+            "content_type": message.content_type,
+            "tg_file_id": tg_file_id,
+            "sent_at": current_datetime(),
+        }
     )
-    await message.reply(ai_message)
-
-
-@dp.callback_query(VoteCBData)
-async def handle_vote_callback(query: CallbackQuery, cb_data: VoteCBData) -> None:
-    ...
+    await message.reply(escape_md2(ai_message))

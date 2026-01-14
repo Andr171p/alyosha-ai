@@ -1,9 +1,12 @@
 import io
 import subprocess  # noqa: S404
 from datetime import datetime
+from pathlib import Path
 
 from markdown_pdf import MarkdownPdf, Section
+from markitdown import MarkItDown
 
+from .core.exceptions import FileDoesNotExistError
 from .settings import TIMEZONE
 
 
@@ -14,10 +17,16 @@ def current_datetime() -> datetime:
 
 
 def convert_document_to_markdown(doc_path: str) -> str:
-    ...
+    """Конвертирует документы в Markdown текст"""
+
+    if not Path(doc_path).exists():
+        raise FileDoesNotExistError(f"`{doc_path} does not exist!`")
+    md = MarkItDown()
+    result = md.convert(doc_path)
+    return result.text_content
 
 
-def create_docx_from_markdown(md_text: str) -> bytes:
+def create_docx_file_from_markdown(md_text: str) -> bytes:
     """Создаёт docx документ по Markdown тексту.
 
     :param md_text: Markdown текст.
@@ -43,7 +52,7 @@ def create_docx_from_markdown(md_text: str) -> bytes:
         return result.stdout
 
 
-def create_pdf_from_markdown(md_text: str) -> bytes:
+def create_pdf_file_from_markdown(md_text: str) -> bytes:
     """Создаёт PDF документ по Markdown тексту.
 
     :param md_text: Markdown текст.
@@ -57,3 +66,25 @@ def create_pdf_from_markdown(md_text: str) -> bytes:
     pdf.save_bytes(buffer)
     buffer.seek(0)
     return buffer.getvalue()
+
+
+def create_md_file_from_markdown(md_text: str) -> bytes:
+    """Создаёт MD файл по Markdown тексту.
+
+    :param md_text: Markdown текст.
+    :returns: Байты Markdown файла.
+    """
+
+    with io.BytesIO() as buffer:
+        buffer.write(md_text.encode("utf-8"))
+        buffer.seek(0)
+    return buffer.read()
+
+
+def escape_md2(text: str) -> str:
+    """Экранирует специальные символы для Markdown V2"""
+
+    chars_to_escape = r"_[]()~`>#+-=|{}.!"
+    for char in chars_to_escape:
+        text = text.replace(char, f"\\{char}")
+    return text

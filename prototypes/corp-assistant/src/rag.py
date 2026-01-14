@@ -154,10 +154,11 @@ async def retrieve_documents(query: str, top_k: int = 10) -> list[str]:
     )
     documents = await hybrid_retriever.ainvoke(query, k=top_k)
     return [
-        f"""**File-ID:** {document.metadata.get("attachment_id")}
+        f"""[{i + 1}]
+        **File-ID:** {document.metadata.get("attachment_id")}
         **Original filename:** {document.metadata.get("original_filename")}
         **Page content:**
         {document.page_content}
         """
-        for document in documents
+        for i, document in enumerate(documents)
     ]

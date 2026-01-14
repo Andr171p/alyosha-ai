@@ -1,6 +1,5 @@
 import io
 import logging
-import wave
 from collections.abc import Iterator
 
 from langchain_core.output_parsers import StrOutputParser
@@ -9,11 +8,10 @@ from langchain_openai import ChatOpenAI
 from pydub import AudioSegment
 from pydub.utils import make_chunks
 
-from ..bot import bot
+from .. import utils
 from ..broker import broker
 from ..core import enums, events, schemas
 from ..settings import PROMPTS_DIR, settings
-from ..utils import create_docx_from_markdown, create_pdf_from_markdown
 from . import media
 
 logger = logging.getLogger(__name__)
@@ -22,14 +20,17 @@ ALLOWED_AUDIO_EXTENSIONS = {"wav", "mp3", "m4a", "ogg", "flac"}
 
 
 def _split_audio_on_segments(
-        audio_data: bytes, audio_format: str, segment_duration_ms: int = 60 * 20 * 100
+        audio_data: bytes, audio_format: str, segment_duration_ms: int = 60 * 20 * 1000
 ) -> Iterator[schemas.AudioSegment]:
+    logger.info("Start split audio on segments...")
     audio = AudioSegment.from_file(io.BytesIO(audio_data), format=audio_format)
     chunks = make_chunks(audio, segment_duration_ms)
     chunks_count = len(chunks)
+    logger.info("Created %s segments from audio", chunks_count)
     for i, chunk in enumerate(chunks):
         buffer = io.BytesIO()
         chunk.export(buffer, format="wav", bitrate="192k")
+        logger.info("Export %s segment data to WAV format", i)
         chunk_data = buffer.getvalue()
         yield schemas.AudioSegment(
             serial_number=i,
@@ -41,45 +42,40 @@ def _split_audio_on_segments(
         )
 
 
-def convert_audio_to_wav(
-        audio_data: bytes,
-        samplerate: int = 44_100,
-        channels: int = 1,
-        sample_width: int = 2,
-) -> bytes:
-    buffer = io.BytesIO()
-    with wave.open(buffer, mode="wb") as wav_file:
-        wav_file.setnchannels(channels)
-        wav_file.setsampwidth(sample_width)
-        wav_file.setframerate(samplerate)
-        wav_file.writeframes(audio_data)
-    buffer.seek(0)
-    return buffer.read()
-
-
 async def download_telegram_audio_files(
         user_id: int, tg_file_ids: list[str]
 ) -> list[schemas.Attachment]:
+    from ..bot import bot  # noqa: PLC0415
+
     attachments: list[schemas.Attachment] = []
     for tg_file_id in tg_file_ids:
         tg_file = await bot.get_file(tg_file_id)
         tg_file_ext = tg_file.file_path.split(".")[-1]
         if tg_file_ext not in ALLOWED_AUDIO_EXTENSIONS:
             raise ValueError(f"Not supported audio format: {tg_file_ext}!")
-        tg_file_buffer = await bot.download_file(destination=io.BytesIO())
+        tg_file_buffer = await bot.download_file(
+            file_path=tg_file.file_path, destination=io.BytesIO()
+        )
         attachment = await media.upload(
-            user_id=user_id, filename=tg_file.file_path, data=tg_file_buffer.getbuffer()
+            user_id=user_id,
+            filename=tg_file.file_path,
+            data=tg_file_buffer.getbuffer().tobytes()
         )
         attachments.append(attachment)
     return attachments
 
 
 async def create_task(
-        user_id: int, tg_file_ids: list[str], output_document_ext: schemas.OutputDocumentExt
+        user_id: int,
+        tg_file_ids: list[str],
+        participants_count: int = 10,
+        output_document_ext: schemas.OutputDocumentExt = "pdf",
 ) -> None:
     attachments = await download_telegram_audio_files(user_id, tg_file_ids)
     task = schemas.AudioRecognitionTask(
-        status=enums.TaskStatus.PENDING, output_document_ext=output_document_ext
+        status=enums.TaskStatus.PENDING,
+        max_speakers_count=participants_count,
+        output_document_ext=output_document_ext
     )
     for attachment in attachments:
         file = await media.download(attachment.id)
@@ -110,8 +106,8 @@ async def generate(audio_transcription: str) -> str:
 def create_document(md_text: str, output_document_ext: schemas.OutputDocumentExt) -> bytes:
     match output_document_ext:
         case "docx":
-            return create_docx_from_markdown(md_text)
+            return utils.create_docx_file_from_markdown(md_text)
         case "pdf":
-            return create_pdf_from_markdown(md_text)
+            return utils.create_pdf_file_from_markdown(md_text)
         case _:
-            return ...
+            return utils.create_md_file_from_markdown(md_text)

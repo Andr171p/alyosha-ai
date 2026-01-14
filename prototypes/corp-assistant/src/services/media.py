@@ -12,7 +12,8 @@ async def upload(user_id: int, filename: str, data: bytes) -> schemas.Attachment
     user_dir = storage.MEDIA_DIR / f"{user_id}"
     user_dir.mkdir(parents=True, exist_ok=True)
     filepath = user_dir / f"{file_id}.{filename.rsplit('.', maxsplit=1)[-1]}"
-    mime_type = magic.from_buffer(data, mime=True)
+    mime = magic.Magic(mime=True)
+    mime_type = mime.from_buffer(data)
     attachment = schemas.Attachment(
         id=file_id,
         uploaded_by=user_id,

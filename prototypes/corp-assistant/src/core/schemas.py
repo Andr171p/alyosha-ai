@@ -1,11 +1,20 @@
 from typing import Literal, Self
 
+import base64
 from datetime import datetime
 from pathlib import Path
 from uuid import UUID, uuid4
 
 import magic
-from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, PositiveInt
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    NonNegativeInt,
+    PositiveInt,
+    field_serializer,
+    field_validator,
+)
 
 from ..settings import TIMEZONE
 from ..utils import current_datetime
@@ -39,11 +48,12 @@ class File(BaseModel):
     @classmethod
     def from_raw(cls, path: str, data: bytes) -> Self:
         mime = magic.Magic(mime=True)
+        mime_type = mime.from_buffer(data)
         file_stat = Path(path).stat()
         return cls(
             path=path,
             size=len(data),
-            mime_type=mime.from_buffer(data),
+            mime_type=mime_type,
             data=data,
             uploaded_at=datetime.fromtimestamp(file_stat.st_ctime, tz=TIMEZONE),
         )
@@ -69,6 +79,19 @@ class AudioSegment(BaseModel):
     format: str
     duration_ms: PositiveInt
 
+    @field_serializer("data")
+    def serialize_data(self, v: bytes) -> str:  # noqa: PLR6301
+        return base64.b64encode(v).decode("ascii")
+
+    @field_validator("data", mode="before")
+    @classmethod
+    def decode_data(cls, v):
+        if isinstance(v, str):
+            return base64.b64decode(v)
+        if isinstance(v, bytes):
+            return v
+        raise ValueError("Audio segment data should be base64 string or bytes")
+
     @property
     def is_first(self) -> bool:
         return self.serial_number == 0
@@ -86,6 +109,7 @@ class AudioRecognitionTask(BaseModel):
     updated_at: datetime = Field(default_factory=current_datetime)
     finished_at: datetime | None = None
     status: TaskStatus
+    max_speakers_count: PositiveInt
     output_document_ext: OutputDocumentExt = "docx"
     recognition_results: list[str] = Field(default_factory=list)
 
