@@ -1,164 +1,101 @@
 from typing import Any
 
 import logging
-import time
-from collections.abc import Iterable, Mapping
-from uuid import UUID
+from uuid import uuid4
 
-from elasticsearch import Elasticsearch
-from elasticsearch.helpers import bulk
-from langchain_core.documents import Document
-from langchain_elasticsearch import ElasticsearchRetriever
+import chromadb
+from langchain_core.embeddings import Embeddings
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from .core import schemas
-from .database import crud, models
-from .settings import settings
-from .utils import convert_document_to_markdown
+from .settings import CHROMA_PATH
 
 logger = logging.getLogger(__name__)
 
 INDEX_NAME = "langchain-diocon-index"
-TEXT_FIELD = "page_content"
-DENSE_VECTOR_FIELD = "embedding"
-METADATA_FIELD = "metadata"
-TOP_K = 10
 
-es_client = Elasticsearch(hosts=[settings.elasticsearch.url])
-
-embeddings = HuggingFaceEmbeddings(
+hf_embeddings = HuggingFaceEmbeddings(
     model_name="deepvk/USER-bge-m3",
     model_kwargs={"device": "cpu"},
     encode_kwargs={"normalize_embeddings": False}
 )
 
 
-def _create_index_if_not_exists(index_name: str) -> None:
-    if es_client.indices.exists(index=index_name):
-        return
-    es_client.indices.create(
-        index=index_name,
-        mappings={
-            "properties": {
-                TEXT_FIELD: {"type": "text"},
-                DENSE_VECTOR_FIELD: {"type": "dense_vector"},
-                METADATA_FIELD: {"type": "object"},
-            }
-        }
-    )
-
-
-def _index_data(
+class RAGPipeline:
+    def __init__(
+        self,
         index_name: str,
-        texts: Iterable[str],
-        metadata: dict[str, Any],
-        refresh: bool = True,
-) -> None:
-    _create_index_if_not_exists(index_name)
-    vectors = embeddings.embed_documents(list(texts))
-    requests = [
-        {
-            "_op_type": "index",
-            "_index": index_name,
-            "_id": i,
-            TEXT_FIELD: text,
-            DENSE_VECTOR_FIELD: vector,
-            METADATA_FIELD: metadata,
-        }
-        for i, (text, vector) in enumerate(zip(texts, vectors, strict=False))
-    ]
-    bulk(es_client, requests)
-    if refresh:
-        es_client.indices.refresh(index=index_name)
-
-
-def _hybrid_query(search_query: str) -> dict[str, Any]:
-    vector = embeddings.embed_query(search_query)
-    return {
-        "retriever": {
-            "rrf": {
-                "retrievers": [
-                    {
-                        "standard": {
-                            "query": {"match": {TEXT_FIELD: search_query}}
-                        }
-                    },
-                    {
-                        "knn":
-                            {
-                                "field": DENSE_VECTOR_FIELD,
-                                "query_vector": vector,
-                                "k": 5,
-                                "num_candidates": 10,
-                             }
-                    }
-                ]
-            }
-        }
-    }
-
-
-def _document_mapper(hit: Mapping[str, Any]) -> Document:
-    return Document(
-        page_content=hit["_source"][TEXT_FIELD], metadata=hit["_source"][METADATA_FIELD]
-    )
-
-
-async def index_documents(file_ids: list[UUID]) -> None:
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1200,
-        chunk_overlap=50,
-        length_function=len
-    )
-    for i, file_id in enumerate(file_ids):
-        start_time = time.time()
-        logger.info(
-            "Start `%s` file processing %s/%s, start time - %s",
-            file_id, i, len(file_ids), start_time
+        embeddings: Embeddings,
+        chunk_size: int = 1000,
+        chunk_overlap: int = 50,
+    ) -> None:
+        self._index_name = index_name
+        self._client = chromadb.PersistentClient(path=CHROMA_PATH)
+        self._client.get_or_create_collection(self._index_name)
+        self._splitter = RecursiveCharacterTextSplitter(
+            chunk_size=chunk_size, chunk_overlap=chunk_overlap, length_function=len
         )
-        attachment = await crud.read(
-            file_id, model_class=models.Attachment, schema_class=schemas.Attachment
+        self._embeddings = embeddings
+
+    def indexing(self, text: str, metadata: dict[str, Any] | None = None) -> list[str]:
+        if not text.strip():
+            logger.warning("[%s] Attempted to index empty text", self._index_name)
+            return []
+        collection = self._client.get_or_create_collection(self._index_name)
+        chunks = self._splitter.split_text(text)
+        chunks_count = len(chunks)
+        ids = [str(uuid4()) for _ in range(chunks_count)]
+        vectors = self._embeddings.embed_documents(chunks)
+        metadatas = [metadata.copy() for _ in range(chunks_count)]
+        collection.add(
+            ids=ids,
+            documents=chunks,
+            embeddings=vectors,
+            metadatas=metadatas,
         )
-        if attachment is None:
-            logger.warning("File %s not attached or was removed, skip this", file_id)
-            continue
-        md_text = convert_document_to_markdown(attachment.filepath)
-        logger.info(
-            "File %s loaded and converted to Markdown, characters length: %s",
-            attachment.original_filename, len(md_text)
+        return ids
+
+    def retrieve(
+            self,
+            query: str,
+            metadata_filter: dict[str, Any] | None = None,
+            search_string: str | None = None,
+            n_results: int = 10,
+    ) -> list[str]:
+        collection = self._client.get_collection(self._index_name)
+        logger.info("[%s] Retrieving for query: '%s...'", self._index_name, query[:50])
+        params = {}
+        query_vector = self._embeddings.embed_query(query)
+        params["query_embeddings"] = [query_vector]
+        if metadata_filter is not None:
+            params["where"] = metadata_filter
+        if search_string is not None:
+            params["where_document"] = {"$contains": search_string}
+        params["n_results"] = n_results
+        result = collection.query(
+            **params, include=["documents", "metadatas", "distances"]
         )
-        chunks = splitter.split_text(md_text)
-        logger.info("Addition %s chunks", len(chunks))
-        _index_data(
-            index_name=INDEX_NAME,
-            texts=chunks,
-            metadata={
-                "file_id": attachment.id,
-                "original_filename": attachment.original_filename,
-            },
-        )
-        execution_time = time.time() - start_time
-        logger.info(
-            "Successfully processed `%s` file, processing duration - %s seconds",
-            attachment.id, execution_time
-        )
+        return [
+            f"""
+            **Document-ID:** {id_}
+            **Relevance score:** {round(distance, 2)}
+            **Source:** {metadata.get('source', '')}
+            **Category:** {metadata.get('category', '')}
+            **Document:**
+            {document}
+            """
+            for id_, document, metadata, distance in zip(
+                result["ids"][0],
+                result["documents"][0],
+                result["metadatas"][0],
+                result["distances"][0],
+                strict=False
+            )
+        ]
+
+    def delete(self, index_name: str) -> None:
+        self._client.delete_collection(index_name)
+        logger.info("[%s] successfully deleted", index_name)
 
 
-async def retrieve_documents(query: str, top_k: int = 10) -> list[str]:
-    hybrid_retriever = ElasticsearchRetriever(
-        index_name=INDEX_NAME,
-        body_func=_hybrid_query,
-        document_mapper=_document_mapper,
-        es_url=settings.elasticsearch.url
-    )
-    documents = await hybrid_retriever.ainvoke(query, k=top_k)
-    return [
-        f"""[{i + 1}]
-        **File-ID:** {document.metadata.get("attachment_id")}
-        **Original filename:** {document.metadata.get("original_filename")}
-        **Page content:**
-        {document.page_content}
-        """
-        for i, document in enumerate(documents)
-    ]
+rag_pipeline = RAGPipeline(index_name=INDEX_NAME, embeddings=hf_embeddings)

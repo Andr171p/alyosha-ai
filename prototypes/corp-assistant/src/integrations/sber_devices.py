@@ -7,7 +7,7 @@ from ..settings import settings
 
 logger = logging.getLogger(__name__)
 
-BASE_URL = "https://ngw.devices.sberbank.ru:9443/api/v2/"
+BASE_URL = "https://ngw.devices.sberbank.ru:9443/api/v2"
 
 
 class SberDevicesError(Exception):
@@ -29,9 +29,10 @@ async def authenticate(use_ssl: bool = False) -> str:
         "RqUID": f"{rq_uid}",
     }
     payload = {"scope": settings.sber_devices.scope}
+    url = f"{BASE_URL}/oauth"
     try:
-        async with aiohttp.ClientSession(base_url=BASE_URL) as session, session.post(
-            url="/oauth", headers=headers, data=payload, ssl=use_ssl
+        async with aiohttp.ClientSession() as session, session.post(
+            url=url, headers=headers, data=payload, ssl=use_ssl
         ) as response:
             response.raise_for_status()
             data = await response.json()

@@ -10,14 +10,24 @@ TIMEZONE = pytz.timezone("Europe/Moscow")
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 PROMPTS_DIR = PROJECT_ROOT / "prompts"
 ENV_PATH = PROJECT_ROOT / ".env"
+AUDIO_MIME_TO_EXT_JSON = PROJECT_ROOT / "audio_mime_to_ext.json"
+CHROMA_PATH = PROJECT_ROOT / ".chroma"
 
 load_dotenv(ENV_PATH)
 
 
-class BotSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="BOT_")
+class TelegramSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="TELEGRAM_")
 
-    token: str = "<TOKEN>"
+    bot_token: str = "<BOT TOKEN>"
+    api_id: str = "<API ID>"
+    api_hash: str = "<API HASH>"
+    api_port: int = 8081
+    api_host: str = "localhost"
+
+    @property
+    def api_url(self) -> str:
+        return f"http://{self.api_host}:{self.api_port}"
 
 
 class YandexCloudSettings(BaseSettings):
@@ -51,23 +61,6 @@ class SberDevicesSettings(BaseSettings):
     scope: str = "<SCOPE>"
     client_id: str = "<CLIENT_ID>"
     client_secret: str = "<CLIENT_SECRET>"
-
-
-class ElasticsearchSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="ELASTICSEARCH_")
-
-    host: str = "elasticsearch"
-    port: int = 9200
-    user: str = "<USER>"
-    password: str = "<PASSWORD>"
-
-    @property
-    def auth(self) -> tuple[str, str]:
-        return self.user, self.password
-
-    @property
-    def url(self) -> str:
-        return f"http://{self.host}:{self.port}/"
 
 
 class PostgresSettings(BaseSettings):
@@ -107,10 +100,9 @@ class AssistantSettings(BaseSettings):
 
 
 class Settings(BaseSettings):
-    bot: BotSettings = BotSettings()
+    telegram: TelegramSettings = TelegramSettings()
     yandexcloud: YandexCloudSettings = YandexCloudSettings()
     sber_devices: SberDevicesSettings = SberDevicesSettings()
-    elasticsearch: ElasticsearchSettings = ElasticsearchSettings()
     postgres: PostgresSettings = PostgresSettings()
     redis: RedisSettings = RedisSettings()
     assistant: AssistantSettings = AssistantSettings()

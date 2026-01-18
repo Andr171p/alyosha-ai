@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 
 from src.database.base import Base
-from src.database.models import Attachment, AudioRecognitionTask, User
+from src.database.models import DrawingUpMinutesOfMeetingTask, User
 from src.settings import settings
 
 # this is the Alembic Config object, which provides

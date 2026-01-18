@@ -117,10 +117,11 @@ async def _upload_file(
         "Authorization": f"Bearer {access_token}",
         "Content-Type": config["content_type"].format(samplerate=samplerate),
     }
+    url = f"{BASE_URL}data:upload"
     try:
         logger.info("Start uploading file to Salute Speech with encoding %s", audio_encoding)
-        async with aiohttp.ClientSession(base_url=BASE_URL) as session, session.post(
-                url="/data:upload", headers=headers, data=data, ssl=use_ssl
+        async with aiohttp.ClientSession() as session, session.post(
+                url=url, headers=headers, data=data, ssl=use_ssl
         ) as response:
             response.raise_for_status()
             data = await response.json()
@@ -139,7 +140,7 @@ async def _create_task(
         request_file_id: UUID,
         audio_encoding: AudioEncoding,
         diarization: bool = True,
-        max_speakers_count: int = 1,
+        max_speakers: int = 1,
         language: Language = "ru-RU",
         channels: int = 1,
         samplerate: int = 16_000,
@@ -154,7 +155,7 @@ async def _create_task(
     :param request_file_id: Идентификатор загруженного файла.
     :param audio_encoding: Аудио-кодек.
     :param diarization: Разделение по спикерам.
-    :param max_speakers_count: Максимальное число спикеров.
+    :param max_speakers: Максимальное число спикеров.
     :param language: Язык для распознавания речи.
     :param channels: Количество каналов аудио.
     :param samplerate: Частота дискретизации аудио.
@@ -182,11 +183,11 @@ async def _create_task(
             "speaker_separation_options": {
                 "enable": diarization,
                 "enable_only_main_speaker": False,
-                "count": min(max_speakers_count, 10),
+                "count": min(max_speakers, 10),
                 # Ограничение на максимальное количество спикеров
             },
         },
-        "request_file_id": request_file_id,
+        "request_file_id": f"{request_file_id}",
     }
     if words:
         payload["hints"] = {
@@ -194,11 +195,12 @@ async def _create_task(
             "enable_letters": enable_letters,
             "eou_timeout": eou_timeout,
         }
+    url = f"{BASE_URL}speech:async_recognize"
     try:
         async with (
-            aiohttp.ClientSession(base_url=BASE_URL) as session,
+            aiohttp.ClientSession() as session,
             session.post(
-                url="/speech/async_recognize",
+                url=url,
                 headers=headers,
                 data=json.dumps(payload),
                 ssl=use_ssl,
@@ -222,9 +224,10 @@ async def _get_task_status(task_id: str, use_ssl: bool = False) -> dict[str, Any
     headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
     params = {"id": task_id}
     payload = {}
+    url = f"{BASE_URL}task:get"
     try:
-        async with aiohttp.ClientSession(base_url=BASE_URL) as session, session.get(
-                url="/task:get",
+        async with aiohttp.ClientSession() as session, session.get(
+                url=url,
                 headers=headers,
                 params=params,
                 data=json.dumps(payload),
@@ -281,9 +284,10 @@ async def _download_file(response_file_id: str, use_ssl: bool = False) -> Recogn
     headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/octet-stream"}
     params = {"response_file_id": response_file_id}
     payload = {}
+    url = f"{BASE_URL}data:download"
     try:
-        async with aiohttp.ClientSession(base_url=BASE_URL) as session, session.get(
-                url="/data:download",
+        async with aiohttp.ClientSession() as session, session.get(
+                url=url,
                 headers=headers,
                 params=params,
                 data=payload,
@@ -322,6 +326,7 @@ async def recognize_async(
     )
     task = await _create_task(
         request_file_id,
+        audio_encoding=audio_encoding,
         channels=channels,
         max_speakers_count=max_speakers_count,
         use_ssl=use_ssl,

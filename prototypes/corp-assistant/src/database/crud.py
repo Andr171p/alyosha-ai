@@ -7,6 +7,7 @@ from sqlalchemy import delete, insert, select, update
 
 from .base import Base, sessionmaker
 
+AnyId = UUID | str | int
 SchemaT = TypeVar("SchemaT", bound=BaseModel)
 ModelT = TypeVar("ModelT", bound=Base)
 
@@ -21,7 +22,7 @@ async def create[SchemaT: BaseModel, ModelT: Base](
 
 
 async def read[SchemaT: BaseModel, ModelT: Base](
-        id: UUID, *, model_class: type[ModelT], schema_class: type[SchemaT]  # noqa: A002
+        id: AnyId, *, model_class: type[ModelT], schema_class: type[SchemaT]  # noqa: A002
 ) -> SchemaT | None:
     async with sessionmaker() as session:
         stmt = select(model_class).where(model_class.id == id)
@@ -43,7 +44,7 @@ async def refresh[SchemaT: BaseModel, ModelT: Base](
         await session.commit()
 
 
-async def remove[ModelT: Base](id: UUID, *, model_class: type[ModelT]) -> None:  # noqa: A002
+async def remove[ModelT: Base](id: AnyId, *, model_class: type[ModelT]) -> None:  # noqa: A002
     async with sessionmaker() as session:
         stmt = delete(model_class).where(model_class.id == id)
         await session.execute(stmt)

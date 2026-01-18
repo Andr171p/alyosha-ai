@@ -1,26 +1,47 @@
 import logging
 from enum import StrEnum
 
-from aiogram import Bot, Dispatcher
+import markdown
+from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
+from aiogram.client.telegram import TelegramAPIServer
 from aiogram.enums.parse_mode import ParseMode
-from aiogram.filters import CommandStart
+from aiogram.filters import Command, CommandStart
 from aiogram.filters.callback_data import CallbackData
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import InlineKeyboardMarkup, Message
-from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.types import InlineKeyboardMarkup, Message, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from aiogram.utils.chat_action import ChatActionSender
+from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
 from .ai_agent import Context, call_agent
-from .core.enums import UserRole
+from .core.schemas import UserRole
 from .services import users
+from .services.minutes import create_task
 from .settings import settings
-from .utils import current_datetime, escape_md2
 
 logger = logging.getLogger(__name__)
 
-bot = Bot(token=settings.bot.token, default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN_V2))
+session = AiohttpSession(
+    api=TelegramAPIServer.from_base(settings.telegram.api_url)
+)
+
+bot = Bot(
+    token=settings.telegram.bot_token,
+    default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+    session=session,
+)
 
 dp = Dispatcher(storage=MemoryStorage())
+
+
+class MinutesForm(StatesGroup):
+    """Форма для составления протокола совещания"""
+
+    file_id = State()
+    document_ext = State()
 
 
 class Vote(StrEnum):
@@ -35,6 +56,8 @@ class VoteCBData(CallbackData, prefix="vote"):
 
 
 def get_voting_kb(user_id: int, message_id: int) -> InlineKeyboardMarkup:
+    """Клавиатура для оценки сообщения от AI ассистента"""
+
     builder = InlineKeyboardBuilder()
     builder.button(text="👍", callback_data=VoteCBData(
         user_id=user_id, message_id=message_id, vote=Vote.LIKE
@@ -47,6 +70,13 @@ def get_voting_kb(user_id: int, message_id: int) -> InlineKeyboardMarkup:
 
 
 def get_admin_menu_kb(user_id: int) -> InlineKeyboardMarkup: ...
+
+
+def get_document_ext_kb() -> ReplyKeyboardMarkup:
+    builder = ReplyKeyboardBuilder()
+    builder.button(text=".docx")
+    builder.button(text=".pdf")
+    return builder.as_markup(resize_keyboard=True, one_time_keyboard=True)
 
 
 @dp.message(CommandStart())
@@ -66,24 +96,50 @@ async def handle_start_cmd(message: Message) -> None:
     await message.reply(f"С возвращением **{existing_user.fist_name}**")
 
 
-@dp.message()
-async def handle_any_message(message: Message) -> None:
-    tg_file_id: str | None = None
-    if message.audio is not None:
-        tg_file_id = message.audio.file_id
-    if message.voice is not None:
-        tg_file_id = message.voice.file_id
-    user = await users.get_by_user_id(message.from_user.id)
-    ai_message = await call_agent(
-        message_text=message.text or f"Создай протокол совещания для файла {tg_file_id}",
-        context=Context(
-            user_id=user.user_id, first_name=user.fist_name, user_role=user.role
-        ),
-        tg_user_message={
-            "tg_message_id": message.message_id,
-            "content_type": message.content_type,
-            "tg_file_id": tg_file_id,
-            "sent_at": current_datetime(),
-        }
+@dp.message(Command("minutes"))
+async def handle_minutes_cmd(message: Message, state: FSMContext) -> None:
+    await message.answer("Отправьте аудио файл или голосовое сообщение")
+    await state.set_state(MinutesForm.file_id)
+
+
+@dp.message(MinutesForm.file_id, F.voice | F.audio)
+async def process_audio_file(message: Message, state: FSMContext) -> None:
+    if message.audio:
+        file_id = message.audio.file_id
+    elif message.voice:
+        file_id = message.voice.file_id
+    else:
+        await message.answer("❌ Пожалуйста, отправьте аудио файл или голосовое сообщение")
+        return
+    await state.update_data(file_id=file_id)
+    await message.answer(
+        text="Выберите файл в котором вам удобнее получить протокол",
+        reply_markup=get_document_ext_kb()
     )
-    await message.reply(escape_md2(ai_message))
+    await state.set_state(MinutesForm.document_ext)
+
+
+@dp.message(MinutesForm.document_ext, F.text)
+async def process_document_ext_choice(message: Message, state: FSMContext) -> None:
+    document_ext = message.text
+    await state.update_data(document_ext=document_ext)
+    data = await state.get_data()
+    await message.answer("Данные переданы ассистенту", reply_markup=ReplyKeyboardRemove())
+    await create_task(
+        user_id=message.from_user.id,
+        file_ids=[data["file_id"]],
+        document_ext=document_ext,
+    )
+
+
+@dp.message()
+async def handle_message(message: Message) -> None:
+    user = await users.get_by_user_id(message.from_user.id)
+    async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
+        ai_message = await call_agent(
+            message_text=message.text,
+            context=Context(
+                user_id=user.user_id, first_name=user.fist_name, user_role=user.role
+            )
+        )
+    await message.reply(markdown.markdown(ai_message))

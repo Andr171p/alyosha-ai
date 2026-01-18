@@ -66,4 +66,6 @@
 
 
 Транскрибация совещания:
-{audio_transcription}
+<transcription>
+{transcription}
+</transcription>
