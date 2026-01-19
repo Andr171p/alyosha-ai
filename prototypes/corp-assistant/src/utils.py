@@ -1,5 +1,6 @@
 import io
 import json
+import re
 from datetime import datetime
 
 from markitdown import MarkItDown
@@ -45,7 +46,3 @@ def escape_md2(text: str) -> str:
 def progress_emojis(perc: float, width: int = 10) -> str:
     filled = round(width * perc / 100)
     return "🌕" * filled + "🌑" * (width - filled)
-
-
-def md_to_pdf(md_text: str) -> bytes:
-    ...

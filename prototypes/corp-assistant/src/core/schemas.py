@@ -55,7 +55,7 @@ class AudioSegment(BaseModel):
 class MinutesTask(BaseModel):
     """Задача на составление протокола совещания"""
 
-    audio_files: list[str]
+    audio_paths: list[str]
     user_id: PositiveInt
     max_speakers: PositiveInt
     document_ext: DocumentExt = ".docx"

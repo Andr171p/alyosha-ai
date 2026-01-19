@@ -5,7 +5,6 @@ from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.redis import AsyncRedisSaver
 from pydantic import BaseModel, Field, PositiveInt
 
-from .core.schemas import UserRole
 from .rag import rag_pipeline
 from .settings import PROMPTS_DIR, settings
 from .utils import current_datetime
@@ -16,7 +15,6 @@ class Context(BaseModel):
 
     user_id: PositiveInt
     first_name: str
-    user_role: UserRole
 
 
 class RAGSearchInput(BaseModel):

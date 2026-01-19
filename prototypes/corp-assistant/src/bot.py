@@ -15,17 +15,18 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import InlineKeyboardMarkup, Message, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from aiogram.utils.chat_action import ChatActionSender
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
+from sulguk import transform_html
 
 from .ai_agent import Context, call_agent
 from .core.schemas import UserRole
 from .services import users
-from .services.minutes import create_task
+from .services.minutes import create_minutes_task
 from .settings import settings
 
 logger = logging.getLogger(__name__)
 
 session = AiohttpSession(
-    api=TelegramAPIServer.from_base(settings.telegram.api_url)
+    api=TelegramAPIServer.from_base(settings.telegram.api_url, is_local=True)
 )
 
 bot = Bot(
@@ -81,7 +82,7 @@ def get_document_ext_kb() -> ReplyKeyboardMarkup:
 
 @dp.message(CommandStart())
 async def handle_start_cmd(message: Message) -> None:
-    existing_user = await users.get_by_user_id(message.from_user.id)
+    existing_user = await users.get(message.from_user.id)
     if existing_user is None:
         saved_user = await users.save(
             user_id=message.from_user.id,
@@ -89,11 +90,11 @@ async def handle_start_cmd(message: Message) -> None:
             first_name=message.from_user.first_name,
             last_name=message.from_user.last_name,
         )
-        await message.reply(f"Привет **{saved_user.fist_name}**")
+        await message.reply(f"Привет <b>{saved_user.fist_name}</b>")
         return
     if existing_user.role in {UserRole.ADMIN, UserRole.MODERATOR}:
         await message.reply("...")
-    await message.reply(f"С возвращением **{existing_user.fist_name}**")
+    await message.reply(f"С возвращением <b>{existing_user.fist_name}</b>")
 
 
 @dp.message(Command("minutes"))
@@ -106,8 +107,10 @@ async def handle_minutes_cmd(message: Message, state: FSMContext) -> None:
 async def process_audio_file(message: Message, state: FSMContext) -> None:
     if message.audio:
         file_id = message.audio.file_id
+        logger.info("Received audio file %s", message.audio.file_name)
     elif message.voice:
         file_id = message.voice.file_id
+        logger.info("Received voice message with duration %s", message.voice.duration)
     else:
         await message.answer("❌ Пожалуйста, отправьте аудио файл или голосовое сообщение")
         return
@@ -122,10 +125,11 @@ async def process_audio_file(message: Message, state: FSMContext) -> None:
 @dp.message(MinutesForm.document_ext, F.text)
 async def process_document_ext_choice(message: Message, state: FSMContext) -> None:
     document_ext = message.text
+    logger.info("User choose %s document extension as output format", document_ext)
     await state.update_data(document_ext=document_ext)
     data = await state.get_data()
     await message.answer("Данные переданы ассистенту", reply_markup=ReplyKeyboardRemove())
-    await create_task(
+    await create_minutes_task(
         user_id=message.from_user.id,
         file_ids=[data["file_id"]],
         document_ext=document_ext,
@@ -134,12 +138,12 @@ async def process_document_ext_choice(message: Message, state: FSMContext) -> No
 
 @dp.message()
 async def handle_message(message: Message) -> None:
-    user = await users.get_by_user_id(message.from_user.id)
     async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
         ai_message = await call_agent(
             message_text=message.text,
             context=Context(
-                user_id=user.user_id, first_name=user.fist_name, user_role=user.role
+                user_id=message.from_user.id, first_name=message.from_user.first_name
             )
         )
-    await message.reply(markdown.markdown(ai_message))
+    result = transform_html(markdown.markdown(ai_message))
+    await message.reply(text=result.text, entities=result.entities)

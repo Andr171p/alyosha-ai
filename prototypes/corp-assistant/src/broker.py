@@ -12,7 +12,7 @@ from pydub.utils import make_chunks
 
 from .core import schemas
 from .integrations import salute_speech
-from .services.minutes import generate_minutes_of_meeting, render_document
+from .services.minutes import generate_meeting_minutes
 from .settings import settings
 from .utils import audio_mime_to_ext, current_datetime, progress_emojis
 
@@ -33,6 +33,14 @@ app = FastStream(broker)
 def split_audio_into_segments(
         audio_data: bytes, audio_format: str, segment_duration_ms: int = 60 * 20 * 1000
 ) -> Iterator[schemas.AudioSegment]:
+    """Разделяет аудио файл на сегменты с заданной продолжительностью.
+
+    :param audio_data: Байты аудио файла.
+    :param audio_format: Формат аудио, например: 'wav', 'ogg', 'm4a'.
+    :param segment_duration_ms: Продолжительность сегмента в миллисекундах.
+    :returns: Объекты аудио сегментов.
+    """
+
     logger.info("Start split audio on segments...")
     audio = AudioSegment.from_file(io.BytesIO(audio_data), format=audio_format)
     chunks = make_chunks(audio, segment_duration_ms)
@@ -56,6 +64,8 @@ def split_audio_into_segments(
 async def update_progress(
         bot: Bot, chat_id: int, percent: float, previous_message_id: int | None = None
 ) -> Message:
+    """Обновляет сообщение с прогрессом расшифровки аудио записи"""
+
     text = f"""
     Расшифровываю аудио ...
     {progress_emojis(percent)}
@@ -74,8 +84,8 @@ async def process_minutes_task(task: schemas.MinutesTask, logger: Logger) -> Non
         text="Начинаю обработку аудио записи, это может занять от 5 до 15 минут ⏳..."
     )
     transcription_segments: list[str] = []
-    for audio_file in task.audio_files:
-        audio_data = await bot.download_file(audio_file, destination=io.BytesIO())
+    for audio_path in task.audio_paths:
+        audio_data = await bot.download_file(audio_path, destination=io.BytesIO())
         mime_type = magic.Magic(mime=True).from_buffer(audio_data)
         for audio_segment in split_audio_into_segments(
                 audio_data, audio_format=audio_mime_to_ext(mime_type)
@@ -85,6 +95,9 @@ async def process_minutes_task(task: schemas.MinutesTask, logger: Logger) -> Non
                 chat_id=task.user_id,
                 percent=audio_segment.index + 1 / audio_segment.segments_count,
                 previous_message_id=bot_message.message_id
+            )
+            logger.info(
+                "Recognizing %s segment of audio file %s", audio_segment.index + 1, audio_path
             )
             transcription = await salute_speech.recognize_async(
                 audio_data=audio_segment.data,
@@ -98,12 +111,14 @@ async def process_minutes_task(task: schemas.MinutesTask, logger: Logger) -> Non
         chat_id=task.user_id,
         text="Всё распознано! 🎤\nФормирую протокол совещания… ✍️\nЭто займёт ещё 30–90 секунд",
     )
-    minutes_md = await generate_minutes_of_meeting(full_transcription)
-    document_file = render_document(minutes_md, document_ext=task.document_ext)
+    minutes_md = await generate_meeting_minutes(full_transcription)
+    md_file = io.BytesIO()
+    md_file.write(minutes_md.encode("utf-8"))
+    md_file.seek(0)
     await bot.send_document(
         chat_id=task.user_id, document=BufferedInputFile(
-            file=document_file,
-            filename=f"Прокол_совещания_{current_datetime()}{task.document_ext}"
+            file=md_file.getvalue(),
+            filename=f"Прокол_совещания_{current_datetime()}.md"
         ),
         caption="Готово! 🎉"
     )
