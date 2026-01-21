@@ -10,7 +10,6 @@ TIMEZONE = pytz.timezone("Europe/Moscow")
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 PROMPTS_DIR = PROJECT_ROOT / "prompts"
 ENV_PATH = PROJECT_ROOT / ".env"
-AUDIO_MIME_TO_EXT_JSON = PROJECT_ROOT / "audio_mime_to_ext.json"
 CHROMA_PATH = PROJECT_ROOT / ".chroma"
 
 load_dotenv(ENV_PATH)

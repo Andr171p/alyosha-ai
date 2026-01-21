@@ -125,6 +125,7 @@ async def _upload_file(
         ) as response:
             response.raise_for_status()
             data = await response.json()
+        logger.info("File successfully uploaded")
         return UUID(data["result"]["request_file_id"])
     except aiohttp.ClientResponseError as e:
         error_message = f"Uploading failed with {response.status} status, error: {e}"

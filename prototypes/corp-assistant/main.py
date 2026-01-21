@@ -1,8 +1,8 @@
-import asyncio
 import logging
 
-from src.bot import bot, dp
-from src.broker import app
+import uvicorn
+
+from src.api import app
 
 
 def configure_logging(level=logging.INFO):
@@ -13,19 +13,6 @@ def configure_logging(level=logging.INFO):
     )
 
 
-async def run_aiogram_bot() -> None:
-    await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
-
-
-async def run_faststream_app() -> None:
-    await app.broker.start()
-
-
-async def main() -> None:
-    await asyncio.gather(run_aiogram_bot(), run_faststream_app())
-
-
 if __name__ == "__main__":
     configure_logging()
-    asyncio.run(main())
+    uvicorn.run(app, host="0.0.0.0", port=8000)  # noqa: S104
