@@ -3,11 +3,14 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from aiogram.types import Update
-from fastapi import FastAPI, File, Request, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from .bot import bot, dp
 from .broker import app as faststream_app
+from .rag import rag_pipeline
+from .service import is_admin
+from .utils import convert_document_to_md
 
 logger = logging.getLogger(__name__)
 
@@ -45,5 +48,23 @@ async def handle_aiogram_bot_update(request: Request) -> None:
     await dp.feed_update(bot=bot, update=update)
 
 
-@app.post("api/v1/documents/upload")
-async def upload_documents(files: list[UploadFile] = File(...)) -> None: ...
+@app.post(
+    path="api/v1/documents/upload",
+    status_code=status.HTTP_201_CREATED,
+    summary="Загрузка документов в базу знаний"
+)
+async def upload_documents(request: Request, files: list[UploadFile] = File(...)) -> None:
+    user_id = request.headers.get("X-User-ID")
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Missing X-User-ID header"
+        )
+    if not is_admin(int(user_id)):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Admin required"
+        )
+    for file in files:
+        file_data = await file.read()
+        file_extension = file.filename.split(".")[-1]
+        md_content = convert_document_to_md(file_data, extension=f".{file_extension}")
+        rag_pipeline.indexing(md_content, metadata={"source": file.filename})
