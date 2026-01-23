@@ -3,9 +3,10 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from aiogram.types import Update
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile, status
+from fastapi import Body, FastAPI, File, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 
+from .ai_agent import Context, call_agent
 from .bot import bot, dp
 from .broker import app as faststream_app
 from .rag import rag_pipeline
@@ -49,7 +50,7 @@ async def handle_aiogram_bot_update(request: Request) -> None:
 
 
 @app.post(
-    path="api/v1/documents/upload",
+    path="/api/v1/documents/upload",
     status_code=status.HTTP_201_CREATED,
     summary="Загрузка документов в базу знаний"
 )
@@ -70,3 +71,18 @@ async def upload_documents(request: Request, files: list[UploadFile] = File(...)
         md_content = convert_document_to_md(file_data, extension=f".{file_extension}")
         rag_pipeline.indexing(md_content, metadata={"source": file.filename})
     logger.info("Finish indexing documents")
+
+
+@app.post(
+    path="/api/v1/assistant/ask",
+    status_code=status.HTTP_200_OK,
+    summary="Получить ответ от AI агента"
+)
+async def ask_assistant(
+        user_id: int = Body(..., embed=True),
+        message_text: str = Body(..., embed=True),
+) -> dict[str, str]:
+    ai_content = await call_agent(
+        message_text, context=Context(user_id=user_id, first_name="")
+    )
+    return {"text": ai_content}
