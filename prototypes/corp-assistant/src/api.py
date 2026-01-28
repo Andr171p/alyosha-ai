@@ -76,7 +76,7 @@ async def upload_documents(request: Request, files: list[UploadFile] = File(...)
 @app.post(
     path="/api/v1/assistant/ask",
     status_code=status.HTTP_200_OK,
-    summary="Получить ответ от AI агента"
+    summary="Получить ответ от AI ассистента"
 )
 async def ask_assistant(
         user_id: int = Body(..., embed=True),
