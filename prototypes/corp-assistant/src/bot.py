@@ -19,4 +19,5 @@ bot = Bot(
 )
 
 dp = Dispatcher(storage=MemoryStorage())
+
 dp.include_router(router)

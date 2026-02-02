@@ -35,7 +35,7 @@ MEETING_MINUTES_PROMPT = (PROMPTS_DIR / "meeting_minutes_prompt.md").read_text(e
 
 
 def split_audio_into_segments(
-        audio_data: bytes, audio_format: str, segment_duration_ms: int = 60 * 20 * 1000
+        audio_data: bytes, audio_format: str, segment_duration_ms: int = 20 * 60 * 1000
 ) -> Iterator[schemas.AudioSegment]:
     """Разделяет аудио файл на сегменты с заданной продолжительностью.
 
@@ -52,15 +52,15 @@ def split_audio_into_segments(
     logger.info("Created %s segments from audio", chunks_count)
     for i, chunk in enumerate(chunks):
         buffer = io.BytesIO()
-        chunk.export(buffer, format="wav", bitrate="192k")
-        logger.info("Export %s segment data to WAV format", i + 1)
+        chunk.export(buffer, format="mp3")
+        logger.info("Export %s segment data to MP3 format", i + 1)
         chunk_data = buffer.getvalue()
         yield schemas.AudioSegment(
             index=i,
             segments_count=chunks_count,
             data=chunk_data,
             size=len(chunk_data),
-            audio_format="wav",
+            audio_format="mp3",
             duration_ms=segment_duration_ms
         )
 
@@ -127,7 +127,7 @@ async def process_minutes_task(task: schemas.MinutesTask, logger: Logger) -> Non
         )
         transcription = await salute_speech.recognize_async(
             audio_data=audio_segment.data,
-            audio_encoding="PCM_S16LE",
+            audio_encoding="MP3",
             max_speakers=task.max_speakers,
         )
         transcription_segments.append(transcription)
